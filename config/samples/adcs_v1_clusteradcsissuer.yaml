@@ -1,0 +1,16 @@
+apiVersion: adcs.certmanager.lcwsre.io/v1
+kind: ClusterAdcsIssuer
+metadata:
+  name: clusteradcsissuer-sample
+spec:
+  # ADCS server URL (certsrv endpoint)
+  url: https://adcs.example.com/certsrv
+  # Reference to a Secret containing 'username' and 'password' keys
+  credentialsRef:
+    name: adcs-credentials
+  # PEM-encoded CA certificate for ADCS server TLS verification
+  caBundle: ""
+  # How often to check request status (Go duration format)
+  statusCheckInterval: "6h"
+  # Retry interval for communication errors
+  retryInterval: "1h"

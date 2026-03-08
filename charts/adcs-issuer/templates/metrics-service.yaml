@@ -1,0 +1,17 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "adcs-issuer.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "adcs-issuer.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 8080
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    {{- include "adcs-issuer.selectorLabels" . | nindent 4 }}
+{{- end }}

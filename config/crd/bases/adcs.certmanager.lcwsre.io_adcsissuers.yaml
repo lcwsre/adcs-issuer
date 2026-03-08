@@ -1,0 +1,90 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.2.5
+  creationTimestamp: null
+  name: adcsissuers.adcs.certmanager.lcwsre.io
+spec:
+  group: adcs.certmanager.lcwsre.io
+  names:
+    kind: AdcsIssuer
+    listKind: AdcsIssuerList
+    plural: adcsissuers
+    singular: adcsissuer
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    schema:
+      openAPIV3Schema:
+        description: AdcsIssuer is the Schema for the adcsissuers API
+        type: object
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AdcsIssuerSpec defines the desired state of AdcsIssuer
+            type: object
+            required:
+            - credentialsRef
+            - url
+            properties:
+              authMode:
+                description: Authentication mode for the ADCS server. Supported values
+                  are "ntlm" (default) and "basic".
+                type: string
+                enum:
+                - ntlm
+                - basic
+              caBundle:
+                description: CABundle is a PEM encoded TLS certificate to use to verify
+                  connections to the ADCS server.
+                format: byte
+                type: string
+              credentialsRef:
+                description: CredentialsRef is a reference to a Secret containing the
+                  username and password for the ADCS server. The secret must contain
+                  two keys, 'username' and 'password'.
+                type: object
+                required:
+                - name
+                properties:
+                  name:
+                    description: Name of the referent.
+                    type: string
+              retryInterval:
+                description: How often to retry in case of communication errors (in
+                  time.ParseDuration() format). Default 1 hour.
+                type: string
+              statusCheckInterval:
+                description: How often to check for request status in the server (in
+                  time.ParseDuration() format). Default 6 hours.
+                type: string
+              url:
+                description: URL is the base URL for the ADCS instance.
+                type: string
+          status:
+            description: AdcsIssuerStatus defines the observed state of AdcsIssuer
+            type: object
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

@@ -1,0 +1,87 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: adcsrequests.adcs.certmanager.lcwsre.io
+spec:
+  group: adcs.certmanager.lcwsre.io
+  names:
+    kind: AdcsRequest
+    listKind: AdcsRequestList
+    plural: adcsrequests
+    singular: adcsrequest
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: State
+          type: string
+          jsonPath: .status.state
+      schema:
+        openAPIV3Schema:
+          description: AdcsRequest is the Schema for the adcsrequests API
+          type: object
+          properties:
+            apiVersion:
+              description: APIVersion defines the versioned schema of this representation of an object.
+              type: string
+            kind:
+              description: Kind is a string value representing the REST resource this object represents.
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: AdcsRequestSpec defines the desired state of AdcsRequest
+              type: object
+              required:
+                - csr
+                - issuerRef
+              properties:
+                csr:
+                  description: Certificate signing request bytes in PEM encoding.
+                  type: string
+                  format: byte
+                issuerRef:
+                  description: IssuerRef references a properly configured AdcsIssuer which should be used to serve this AdcsRequest.
+                  type: object
+                  required:
+                    - name
+                  properties:
+                    group:
+                      description: Group of the resource being referred to.
+                      type: string
+                    kind:
+                      description: Kind of the resource being referred to.
+                      type: string
+                    name:
+                      description: Name of the resource being referred to.
+                      type: string
+                certTemplate:
+                  description: |
+                    Name of the ADCS certificate template to use for this request.
+                    Read from the "cert-manager.io/cert-template" annotation on the Certificate resource.
+                    If not set, the default template (BasicSSLWebServer) will be used.
+                  type: string
+            status:
+              description: AdcsRequestStatus defines the observed state of AdcsRequest
+              type: object
+              properties:
+                id:
+                  description: ID of the Request assigned by the ADCS.
+                  type: string
+                reason:
+                  description: Reason optionally provides more information about a why the AdcsRequest is in the current state.
+                  type: string
+                state:
+                  description: State contains the current state of this ADCSRequest resource.
+                  type: string
+                  enum:
+                    - pending
+                    - ready
+                    - errored
+                    - rejected

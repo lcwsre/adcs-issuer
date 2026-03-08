@@ -1,0 +1,100 @@
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-adcs-certmanager-lcwsre-io-v1-adcsissuer
+  failurePolicy: Fail
+  name: adcsissuer-mutation.adcs.certmanager.lcwsre.io
+  sideEffects: None
+  rules:
+  - apiGroups:
+    - adcs.certmanager.lcwsre.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - adcsissuer
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-adcs-certmanager-lcwsre-io-v1-clusteradcsissuer
+  failurePolicy: Fail
+  name: mclusteradcsissuer.kb.io
+  sideEffects: None
+  rules:
+  - apiGroups:
+    - adcs.certmanager.lcwsre.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusteradcsissuers
+
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-adcs-certmanager-lcwsre-io-v1-adcsissuer
+  failurePolicy: Fail
+  name: adcsissuer-validation.adcs.certmanager.lcwsre.io
+  sideEffects: None
+  rules:
+  - apiGroups:
+    - adcs.certmanager.lcwsre.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - adcsissuer
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-adcs-certmanager-lcwsre-io-v1-clusteradcsissuer
+  failurePolicy: Fail
+  name: vclusteradcsissuer.kb.io
+  sideEffects: None
+  rules:
+  - apiGroups:
+    - adcs.certmanager.lcwsre.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusteradcsissuers

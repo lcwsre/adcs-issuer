@@ -1,0 +1,13 @@
+version: "2"
+domain: certmanager.lcwsre.io
+repo: github.com/lcwsre/adcs-issuer
+resources:
+- group: adcs
+  version: v1
+  kind: AdcsRequest
+- group: adcs
+  version: v1
+  kind: AdcsIssuer
+- group: adcs
+  version: v1
+  kind: ClusterAdcsIssuer

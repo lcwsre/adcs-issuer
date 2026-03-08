@@ -1,0 +1,59 @@
+{{- if .Values.adcs.issuer.create }}
+{{- $credentialSecretName := "" }}
+{{- if .Values.adcs.credentials.existingSecret }}
+  {{- $credentialSecretName = .Values.adcs.credentials.existingSecret }}
+{{- else if .Values.adcs.credentials.create }}
+  {{- $credentialSecretName = (.Values.adcs.credentials.name | default (printf "%s-credentials" (include "adcs-issuer.fullname" .))) }}
+{{- else }}
+  {{- fail "adcs.credentials.create must be true or adcs.credentials.existingSecret must be set when adcs.issuer.create is true" }}
+{{- end }}
+---
+{{- if eq .Values.adcs.issuer.kind "ClusterAdcsIssuer" }}
+apiVersion: adcs.certmanager.lcwsre.io/v1
+kind: ClusterAdcsIssuer
+metadata:
+  name: {{ .Values.adcs.issuer.name | default (include "adcs-issuer.fullname" .) }}
+  labels:
+    {{- include "adcs-issuer.labels" . | nindent 4 }}
+spec:
+  url: {{ required "adcs.issuer.url is required when adcs.issuer.create is true" .Values.adcs.issuer.url | quote }}
+  credentialsRef:
+    name: {{ $credentialSecretName }}
+  {{- if .Values.adcs.issuer.caBundle }}
+  caBundle: {{ .Values.adcs.issuer.caBundle | quote }}
+  {{- end }}
+  {{- if .Values.adcs.issuer.statusCheckInterval }}
+  statusCheckInterval: {{ .Values.adcs.issuer.statusCheckInterval | quote }}
+  {{- end }}
+  {{- if .Values.adcs.issuer.retryInterval }}
+  retryInterval: {{ .Values.adcs.issuer.retryInterval | quote }}
+  {{- end }}
+  {{- if .Values.adcs.issuer.authMode }}
+  authMode: {{ .Values.adcs.issuer.authMode | quote }}
+  {{- end }}
+{{- else }}
+apiVersion: adcs.certmanager.lcwsre.io/v1
+kind: AdcsIssuer
+metadata:
+  name: {{ .Values.adcs.issuer.name | default (include "adcs-issuer.fullname" .) }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "adcs-issuer.labels" . | nindent 4 }}
+spec:
+  url: {{ required "adcs.issuer.url is required when adcs.issuer.create is true" .Values.adcs.issuer.url | quote }}
+  credentialsRef:
+    name: {{ $credentialSecretName }}
+  {{- if .Values.adcs.issuer.caBundle }}
+  caBundle: {{ .Values.adcs.issuer.caBundle | quote }}
+  {{- end }}
+  {{- if .Values.adcs.issuer.statusCheckInterval }}
+  statusCheckInterval: {{ .Values.adcs.issuer.statusCheckInterval | quote }}
+  {{- end }}
+  {{- if .Values.adcs.issuer.retryInterval }}
+  retryInterval: {{ .Values.adcs.issuer.retryInterval | quote }}
+  {{- end }}
+  {{- if .Values.adcs.issuer.authMode }}
+  authMode: {{ .Values.adcs.issuer.authMode | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,16 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "adcs-issuer.webhookServiceName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "adcs-issuer.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 443
+      targetPort: webhook
+      protocol: TCP
+  selector:
+    {{- include "adcs-issuer.selectorLabels" . | nindent 4 }}
+{{- end }}

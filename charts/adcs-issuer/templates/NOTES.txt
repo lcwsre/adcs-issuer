@@ -1,0 +1,75 @@
+ADCS Issuer has been installed successfully!
+
+{{- if .Values.installCRDs }}
+
+CRDs have been installed:
+  - adcsissuers.adcs.certmanager.lcwsre.io
+  - adcsrequests.adcs.certmanager.lcwsre.io
+  - clusteradcsissuers.adcs.certmanager.lcwsre.io
+{{- end }}
+
+{{- if .Values.adcs.credentials.create }}
+
+ADCS Credentials Secret created:
+  Name: {{ .Values.adcs.credentials.name | default (printf "%s-credentials" (include "adcs-issuer.fullname" .)) }}
+  Namespace: {{ .Release.Namespace }}
+  NOTE: The secret has "helm.sh/resource-policy: keep" annotation.
+        It will NOT be deleted when you uninstall the chart.
+{{- end }}
+
+{{- if .Values.adcs.issuer.create }}
+
+{{ .Values.adcs.issuer.kind }} created:
+  Name: {{ .Values.adcs.issuer.name | default (include "adcs-issuer.fullname" .) }}
+  URL:  {{ .Values.adcs.issuer.url }}
+{{- end }}
+
+{{- if .Values.adcs.certificate.create }}
+
+Certificate requested:
+  Name:   {{ .Values.adcs.certificate.name | default (printf "%s-cert" (include "adcs-issuer.fullname" .)) }}
+  Secret: {{ .Values.adcs.certificate.secretName | default (printf "%s-tls" (include "adcs-issuer.fullname" .)) }}
+  
+  Check certificate status:
+    kubectl get certificate {{ .Values.adcs.certificate.name | default (printf "%s-cert" (include "adcs-issuer.fullname" .)) }} -n {{ .Release.Namespace }}
+{{- end }}
+
+{{- if not .Values.adcs.issuer.create }}
+========================================================================
+NEXT STEPS - To complete the setup:
+========================================================================
+
+  1. Create a secret with your ADCS credentials (if not using adcs.credentials.create):
+
+     kubectl create secret generic adcs-credentials \
+       --from-literal=username='DOMAIN\\username' \
+       --from-literal=password='your-password' \
+       -n {{ .Release.Namespace }}
+
+  2. Create an AdcsIssuer or ClusterAdcsIssuer:
+
+     cat <<EOF | kubectl apply -f -
+     apiVersion: adcs.certmanager.lcwsre.io/v1
+     kind: ClusterAdcsIssuer
+     metadata:
+       name: my-adcs-issuer
+     spec:
+       url: https://your-adcs-server.example.com/certsrv
+       credentialsRef:
+         name: adcs-credentials
+       caBundle: <BASE64_ENCODED_CA_CERT>
+     EOF
+
+  Or use the all-in-one approach with helm upgrade:
+
+     helm upgrade {{ .Release.Name }} adcs-issuer \
+       --set adcs.credentials.create=true \
+       --set adcs.credentials.username='DOMAIN\\user' \
+       --set adcs.credentials.password='password' \
+       --set adcs.issuer.create=true \
+       --set adcs.issuer.kind=ClusterAdcsIssuer \
+       --set adcs.issuer.url='https://adcs.example.com/certsrv' \
+       --set-file adcs.issuer.caBundle=ca-bundle.pem
+{{- end }}
+
+For more information, visit: https://github.com/lcwsre/adcs-issuer

@@ -1,0 +1,20 @@
+apiVersion: v2
+name: adcs-issuer
+description: A cert-manager external issuer for Microsoft Active Directory Certificate Services (ADCS)
+type: application
+version: 0.7.0
+appVersion: "1.0.7"
+home: https://github.com/lcwsre/adcs-issuer
+sources:
+  - https://github.com/lcwsre/adcs-issuer
+maintainers:
+  - name: LC Waikiki SRE Team
+    email: lcwsre@lcwaikiki.com
+keywords:
+  - cert-manager
+  - adcs
+  - certificate
+  - pki
+  - issuer
+  - active-directory
+kubeVersion: ">=1.25.0-0"

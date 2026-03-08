@@ -1,0 +1,35 @@
+{{- if .Values.adcs.certificate.create }}
+{{- if not .Values.adcs.issuer.create }}
+  {{- fail "adcs.issuer.create must be true when adcs.certificate.create is true" }}
+{{- end }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.adcs.certificate.name | default (printf "%s-cert" (include "adcs-issuer.fullname" .)) }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "adcs-issuer.labels" . | nindent 4 }}
+  {{- if .Values.adcs.certificate.certTemplate }}
+  annotations:
+    cert-manager.io/cert-template: {{ .Values.adcs.certificate.certTemplate | quote }}
+  {{- end }}
+spec:
+  secretName: {{ .Values.adcs.certificate.secretName | default (printf "%s-tls" (include "adcs-issuer.fullname" .)) }}
+  issuerRef:
+    group: adcs.certmanager.lcwsre.io
+    kind: {{ .Values.adcs.issuer.kind }}
+    name: {{ .Values.adcs.issuer.name | default (include "adcs-issuer.fullname" .) }}
+  {{- if .Values.adcs.certificate.commonName }}
+  commonName: {{ .Values.adcs.certificate.commonName | quote }}
+  {{- end }}
+  {{- if .Values.adcs.certificate.dnsNames }}
+  dnsNames:
+    {{- toYaml .Values.adcs.certificate.dnsNames | nindent 4 }}
+  {{- end }}
+  {{- if .Values.adcs.certificate.duration }}
+  duration: {{ .Values.adcs.certificate.duration | quote }}
+  {{- end }}
+  {{- if .Values.adcs.certificate.renewBefore }}
+  renewBefore: {{ .Values.adcs.certificate.renewBefore | quote }}
+  {{- end }}
+{{- end }}

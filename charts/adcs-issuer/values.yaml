@@ -1,0 +1,180 @@
+# Default values for adcs-issuer
+# This is a YAML-formatted file.
+
+# -- Number of controller replicas
+replicaCount: 1
+
+image:
+  # -- Custom container registry URL (e.g., myregistry.azurecr.io, harbor.example.com)
+  # When set, the final image will be: <registry>/<repository>:<tag>
+  # When empty, the image will be: <repository>:<tag>
+  registry: ""
+  # -- Controller image repository
+  repository: adcs-issuer
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Overrides the image tag (default is the chart appVersion)
+  tag: "1.0.7"
+
+# -- Reference existing image pull secrets by name
+# Use this if you already have a registry secret in the namespace
+imagePullSecrets: []
+#   - name: my-existing-registry-secret
+
+imageCredentials:
+  # -- Create a Docker registry secret for pulling images from a private registry
+  create: false
+  # -- Registry server URL (e.g., https://myregistry.azurecr.io)
+  registry: ""
+  # -- Registry username
+  username: ""
+  # -- Registry password
+  password: ""
+  # -- Registry email (optional)
+  email: ""
+  # -- Override the registry secret name (defaults to <fullname>-registry)
+
+# -- Override the release name
+nameOverride: ""
+# -- Override the full release name
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Specifies whether a ServiceAccount should be created
+  create: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use. If not set, a name is generated using the fullname template
+  name: ""
+
+# -- Annotations to add to the controller Pod
+podAnnotations: {}
+
+# -- Security context for the controller Pod
+podSecurityContext: {}
+
+# -- Security context for the controller container
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+
+# -- Controller container resource requests and limits
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+# -- Node selector for scheduling
+nodeSelector: {}
+
+# -- Tolerations for scheduling
+tolerations: []
+
+# -- Affinity rules for scheduling
+affinity: {}
+
+# -- Additional controller arguments
+extraArgs: []
+# - --enable-approved-check=false
+
+leaderElection:
+  # -- Enable leader election for controller manager
+  enabled: true
+
+metrics:
+  # -- Enable metrics endpoint
+  enabled: true
+  # -- Metrics listen address
+  address: ":8080"
+
+healthcheck:
+  # -- Health/readiness probe port
+  port: 8081
+
+webhook:
+  # -- Enable admission webhooks
+  enabled: true
+  # -- Webhook service port
+  port: 9443
+
+certManager:
+  # -- cert-manager namespace (for approver RBAC)
+  namespace: cert-manager
+  # -- cert-manager service account name
+  serviceAccountName: cert-manager
+
+# -- Additional labels to add to all resources
+commonLabels: {}
+
+# ============================================================
+# ADCS Configuration
+# Configure credentials, issuer CR, and sample certificate
+# to deploy everything with a single helm install.
+# ============================================================
+adcs:
+  credentials:
+    # -- Create a Kubernetes Secret with ADCS credentials
+    create: false
+    # -- Secret name (defaults to <fullname>-credentials)
+    name: ""
+    # -- ADCS username (e.g., DOMAIN\\username)
+    username: ""
+    # -- ADCS password
+    password: ""
+    # -- Use an existing Secret instead of creating a new one.
+    # When set, 'create' is ignored for credential lookup.
+    existingSecret: ""
+
+  issuer:
+    # -- Create an AdcsIssuer or ClusterAdcsIssuer CR
+    create: false
+    # -- Issuer kind: "AdcsIssuer" (namespace-scoped) or "ClusterAdcsIssuer" (cluster-scoped)
+    kind: ClusterAdcsIssuer
+    # -- Issuer resource name (defaults to <fullname>)
+    name: "adcs-issuer"
+    # -- ADCS server URL (e.g., https://adcs.example.com/certsrv)
+    url: "https://adcs.example.com/certsrv"
+    # -- PEM-encoded CA bundle for ADCS server TLS verification (base64-encoded).
+    # Leave empty to use system CA pool (works for public CAs like GoDaddy, DigiCert, etc.)
+    # Only set this if ADCS server uses a private/internal CA for its TLS certificate.
+    caBundle: ""
+    # -- How often to check request status on the ADCS server (Go duration, e.g., "6h")
+    statusCheckInterval: "6h"
+    # -- Retry interval for communication errors (Go duration, e.g., "1h")
+    retryInterval: "5m"
+    # -- Authentication mode for the ADCS server.
+    # "ntlm" (default): Uses NTLM authentication (requires domain-joined or NTLM-capable environment)
+    # "basic": Uses HTTP Basic Authentication (requires Basic Auth enabled on IIS/ADCS certsrv)
+    authMode: "ntlm"
+
+  certificate:
+    # -- Create a sample cert-manager Certificate resource
+    create: false
+    # -- Certificate name
+    name: "test-certificate"
+    # -- Certificate common name
+    commonName: "app.example.com"
+    # -- ADCS certificate template name.
+    # This sets the "cert-manager.io/cert-template" annotation on the Certificate.
+    # Examples:
+    #   "WebServer"                  - for basic web server SSL certificates
+    #   "SubCA"                     - for subordinate CA certificates
+    # If not set, defaults to "BasicSSLWebServer" in the controller.
+    certTemplate: "WebServer"
+    # -- DNS names for the certificate
+    dnsNames:
+      - app.example.com
+    #   - www.example.com
+    # -- Secret name to store the issued TLS certificate
+    secretName: "app-example-com-tls"
+    # -- Certificate duration (default: 2160h = 90 days)
+    duration: "2160h"
+    # -- Certificate renewal window before expiry
+    renewBefore: "360h"

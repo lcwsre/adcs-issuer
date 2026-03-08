@@ -1,0 +1,13 @@
+apiVersion: adcs.certmanager.lcwsre.io/v1
+kind: AdcsRequest
+metadata:
+  name: adcsrequest-sample
+  namespace: default
+spec:
+  # PEM-encoded Certificate Signing Request
+  csr: ""
+  # Reference to the issuer that will process this request
+  issuerRef:
+    group: adcs.certmanager.lcwsre.io
+    kind: ClusterAdcsIssuer
+    name: clusteradcsissuer-sample
