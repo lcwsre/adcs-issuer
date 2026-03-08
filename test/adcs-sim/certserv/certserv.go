@@ -83,7 +83,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			respondError(w, "Cannot find root CA cert.")
 			res := Resp{"Cannot find root CA cert.", "Error"}
-			tmpl.Execute(w, res)
+			_ = tmpl.Execute(w, res)
 			return
 		}
 		w.Header().Add("Content-Type", "application/pkix-cert")
@@ -103,7 +103,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 		// Error other than 'file doesn't exists' occured
 		msg := fmt.Sprintf("Cannot open certificate %s.", reqId[0])
 		res := Resp{msg, "Error"}
-		tmpl.Execute(w, res)
+		_ = tmpl.Execute(w, res)
 		return
 	}
 	// Certificate doesn't exist. Let's process the CSR
@@ -111,7 +111,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		msg := fmt.Sprintf("Cannot open CSR %s.", reqId[0])
 		res := Resp{msg, "Error"}
-		tmpl.Execute(w, res)
+		_ = tmpl.Execute(w, res)
 		return
 	}
 	fileInfo, _ := os.Lstat(csrFileName)
@@ -119,7 +119,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		msg := fmt.Sprintf("Cannot decode CSR %s.", reqId[0])
 		res := Resp{msg, "Error"}
-		tmpl.Execute(w, res)
+		_ = tmpl.Execute(w, res)
 		return
 	}
 
@@ -138,7 +138,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 		// Need to wait. Respond with 'pending'.
 		fmt.Printf("Certificate will be issued issue in %s.\n", issueTime.Sub(time.Now()).String())
 		res := Resp{"Taken Under Submission", "The operation completed successfully. 0x0 (WIN32: 0)"}
-		tmpl.Execute(w, res)
+		_ = tmpl.Execute(w, res)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 		// Certificate must be rejected
 		fmt.Printf("Certificate rejected.\n")
 		res := Resp{"Denied by CS simulator", "The request was denied by a certificate manager or CA administrator. 0x80094014 (-2146877420 CERTSRV_E_ADMIN_DENIED_REQUEST)"}
-		tmpl.Execute(w, res)
+		_ = tmpl.Execute(w, res)
 		return
 	}
 	// Generate the cert and send it back
@@ -155,7 +155,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		// Error
 		res := Resp{"Cannot create certificate", "Error"}
-		tmpl.Execute(w, res)
+		_ = tmpl.Execute(w, res)
 		return
 	}
 	err = os.WriteFile(certFileName, []byte(certPem), 0644)
@@ -189,7 +189,7 @@ func (c *Certserv) HandleCertcarcAsp(w http.ResponseWriter, r *http.Request) {
 	}
 	res := Resp{"0"}
 
-	tmpl.Execute(w, res)
+	_ = tmpl.Execute(w, res)
 }
 
 func (c *Certserv) HandleCertfnshAsp(w http.ResponseWriter, req *http.Request) {
@@ -251,7 +251,7 @@ func (c *Certserv) HandleCertfnshAsp(w http.ResponseWriter, req *http.Request) {
 			ReqID string
 		}
 		res := Resp{fmt.Sprintf("%d", certId)}
-		tmpl.Execute(w, res)
+		_ = tmpl.Execute(w, res)
 		return
 	}
 

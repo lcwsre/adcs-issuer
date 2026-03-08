@@ -80,7 +80,7 @@ func (r *AdcsRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// final state (Rejected/Errored). Return early.
 	if cert == nil && caCert == nil && err == nil {
 		log.Info("Request in final state, nothing to do")
-		r.setStatus(ctx, ar)
+		_ = r.setStatus(ctx, ar)
 		return ctrl.Result{}, nil
 	}
 
@@ -95,13 +95,13 @@ func (r *AdcsRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	case api.Pending:
 		// Check again later
 		log.Info(fmt.Sprintf("Pending request will be re-tried in %v", issuer.StatusCheckInterval))
-		r.setStatus(ctx, ar)
+		_ = r.setStatus(ctx, ar)
 		return ctrl.Result{Requeue: true, RequeueAfter: issuer.StatusCheckInterval}, nil
 	case api.Ready:
 		// Skip if CertificateRequest already has certificate data
 		if len(cr.Status.Certificate) > 0 {
 			log.Info("CertificateRequest already has certificate data, skipping")
-			r.setStatus(ctx, ar)
+			_ = r.setStatus(ctx, ar)
 			return ctrl.Result{}, nil
 		}
 		cr.Status.Certificate = cert
@@ -115,11 +115,15 @@ func (r *AdcsRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		// re-tries such requests (re-created CertificateRequest object) what doesn't make sense in case of rejection.
 		// We keep the Reason 'Pending' to prevent from re-trying while the actual status is in the Status Condition's Message field.
 		// TODO: change it when cert-manager handles this better.
-		r.CertificateRequestController.SetStatus(ctx, &cr, cmmeta.ConditionFalse, cmapi.CertificateRequestReasonPending, "ADCS request rejected")
+		if err := r.CertificateRequestController.SetStatus(ctx, &cr, cmmeta.ConditionFalse, cmapi.CertificateRequestReasonPending, "ADCS request rejected"); err != nil {
+			log.Error(err, "Failed to update CertificateRequest status for rejected request")
+		}
 	case api.Errored:
-		r.CertificateRequestController.SetStatus(ctx, &cr, cmmeta.ConditionFalse, cmapi.CertificateRequestReasonFailed, "ADCS request errored")
+		if err := r.CertificateRequestController.SetStatus(ctx, &cr, cmmeta.ConditionFalse, cmapi.CertificateRequestReasonFailed, "ADCS request errored"); err != nil {
+			log.Error(err, "Failed to update CertificateRequest status for errored request")
+		}
 	}
-	r.setStatus(ctx, ar)
+	_ = r.setStatus(ctx, ar)
 
 	return ctrl.Result{}, nil
 }

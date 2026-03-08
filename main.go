@@ -95,8 +95,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr.AddHealthzCheck("healthz", healthcheck.HealthCheck)
-	mgr.AddReadyzCheck("readyz", healthcheck.HealthCheck)
+	if err := mgr.AddHealthzCheck("healthz", healthcheck.HealthCheck); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthcheck.HealthCheck); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
 	certificateRequestReconciler := &controllers.CertificateRequestReconciler{
 		Client:   mgr.GetClient(),
 		Log:      ctrl.Log.WithName("controllers").WithName("CertificateRequest"),
