@@ -13,8 +13,5 @@ type Cert struct {
 }
 
 func (c *Cert) TimeToSign() bool {
-	if time.Now().After(c.SignTime) {
-		return true
-	}
-	return false
+	return time.Now().After(c.SignTime)
 }

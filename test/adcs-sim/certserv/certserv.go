@@ -136,7 +136,7 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 	issueTime := fileInfo.ModTime().Add(orders.delay)
 	if issueTime.After(time.Now()) {
 		// Need to wait. Respond with 'pending'.
-		fmt.Printf("Certificate will be issued issue in %s.\n", issueTime.Sub(time.Now()).String())
+		fmt.Printf("Certificate will be issued issue in %s.\n", time.Until(issueTime).String())
 		res := Resp{"Taken Under Submission", "The operation completed successfully. 0x0 (WIN32: 0)"}
 		_ = tmpl.Execute(w, res)
 		return
@@ -169,7 +169,6 @@ func (c *Certserv) HandleCertnewCer(w http.ResponseWriter, req *http.Request) {
 	fmt.Printf("Sending certificate:\n%s\n", certPem)
 	w.Header().Add("Content-Type", "application/pkix-cert")
 	fmt.Fprintf(w, "%s", certPem)
-	return
 }
 
 func (c *Certserv) HandleCertnewP7b(w http.ResponseWriter, r *http.Request) {

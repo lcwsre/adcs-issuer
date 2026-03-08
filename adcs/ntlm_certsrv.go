@@ -23,7 +23,6 @@ type NtlmCertsrv struct {
 	url        string
 	username   string
 	password   string
-	ca         string
 	httpClient *http.Client
 }
 
@@ -144,7 +143,7 @@ func (s *NtlmCertsrv) GetExistingCertificate(id string) (AdcsResponseStatus, str
 	defer res.Body.Close()
 
 	if res.StatusCode == http.StatusOK {
-		switch ct := strings.Split(res.Header.Get(http.CanonicalHeaderKey("content-type")), ";"); ct[0] {
+		switch ct := strings.Split(res.Header.Get("Content-Type"), ";"); ct[0] {
 		case ct_html:
 			// Denied or pending
 			body, err := io.ReadAll(io.LimitReader(res.Body, maxResponseSize))
@@ -329,7 +328,7 @@ func (s *NtlmCertsrv) obtainCaCertificate(certPage string, expectedContentType s
 	defer res2.Body.Close()
 
 	if res2.StatusCode == http.StatusOK {
-		ct := res2.Header.Get(http.CanonicalHeaderKey("content-type"))
+		ct := res2.Header.Get("Content-Type")
 		if expectedContentType != ct {
 			err = fmt.Errorf("Unexpected content type %s:", ct)
 			log.Printf("ERROR: %s", err.Error())
