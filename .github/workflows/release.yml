@@ -49,6 +49,8 @@ jobs:
           context: .
           target: production
           push: true
+          provenance: mode=max
+          sbom: true
           tags: |
             ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
             ${{ env.IMAGE_NAME }}:latest
