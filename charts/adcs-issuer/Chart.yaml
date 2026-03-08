@@ -2,8 +2,8 @@ apiVersion: v2
 name: adcs-issuer
 description: A cert-manager external issuer for Microsoft Active Directory Certificate Services (ADCS)
 type: application
-version: 0.7.0
-appVersion: "1.0.7"
+version: 0.8.0
+appVersion: "1.0.8"
 home: https://github.com/lcwsre/adcs-issuer
 sources:
   - https://github.com/lcwsre/adcs-issuer

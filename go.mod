@@ -1,6 +1,6 @@
 module github.com/lcwsre/adcs-issuer
 
-go 1.25.0
+go 1.26.1
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358
