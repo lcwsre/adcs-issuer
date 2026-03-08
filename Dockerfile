@@ -1,10 +1,26 @@
 # Build the manager binary
-# Option 1: Pre-built binary (fast) - build locally first:
+# Multi-stage build (requires internet access from Docker):
+#   docker build -t lcwsre/adcs-issuer:latest .
+#
+# If your environment has proxy/TLS issues, build locally first:
 #   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags='-w -s' -trimpath -o manager main.go
-# Option 2: Build inside Docker (slow but self-contained) - uncomment the builder stage below
+#   docker build --target production -t lcwsre/adcs-issuer:latest .
 
-# Use distroless as minimal base image to package the manager binary
-FROM gcr.io/distroless/static:nonroot
+# --- Builder stage ---
+FROM golang:1.25 AS builder
+WORKDIR /workspace
+COPY go.mod go.sum ./
+RUN go mod download
+COPY main.go main.go
+COPY api/ api/
+COPY controllers/ controllers/
+COPY adcs/ adcs/
+COPY issuers/ issuers/
+COPY healthcheck/ healthcheck/
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags='-w -s' -trimpath -o manager main.go
+
+# --- Production stage ---
+FROM gcr.io/distroless/static:nonroot AS production
 
 LABEL org.opencontainers.image.source="https://github.com/lcwsre/adcs-issuer" \
       org.opencontainers.image.description="ADCS Issuer for cert-manager" \

@@ -8,9 +8,9 @@ image:
   # -- Custom container registry URL (e.g., myregistry.azurecr.io, harbor.example.com)
   # When set, the final image will be: <registry>/<repository>:<tag>
   # When empty, the image will be: <repository>:<tag>
-  registry: ""
+  registry: "docker.io"
   # -- Controller image repository
-  repository: adcs-issuer
+  repository: lcwsre/adcs-issuer
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Overrides the image tag (default is the chart appVersion)
