@@ -78,7 +78,7 @@ func (r *AdcsRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// If Issue returned no data and no error, the request was in a truly
 	// final state (Rejected/Errored). Return early.
-	if cert == nil && caCert == nil && err == nil {
+	if cert == nil && caCert == nil {
 		log.Info("Request in final state, nothing to do")
 		_ = r.setStatus(ctx, ar)
 		return ctrl.Result{}, nil
