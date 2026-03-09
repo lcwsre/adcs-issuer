@@ -29,6 +29,7 @@ import (
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 	api "github.com/lcwsre/adcs-issuer/api/v1"
 	core "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apimacherrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -50,6 +51,8 @@ var (
 
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificaterequests/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=patch
 
 func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -169,11 +172,9 @@ func (r *CertificateRequestReconciler) Reconcile(ctx context.Context, req ctrl.R
 }
 
 func (r *CertificateRequestReconciler) createAdcsRequest(ctx context.Context, cmRequest *cmapi.CertificateRequest) error {
-	// Read the ADCS certificate template from annotation
-	certTemplate := ""
-	if cmRequest.Annotations != nil {
-		certTemplate = cmRequest.Annotations["cert-manager.io/cert-template"]
-	}
+	// Resolve the ADCS certificate template from the annotation chain:
+	// CertificateRequest → Certificate → Ingress
+	certTemplate := r.resolveTemplateAnnotation(ctx, cmRequest)
 
 	spec := api.AdcsRequestSpec{
 		CSRPEM:       cmRequest.Spec.Request,
@@ -194,6 +195,68 @@ func (r *CertificateRequestReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cmapi.CertificateRequest{}).
 		Complete(r)
+}
+
+const certTemplateAnnotation = "cert-manager.io/cert-template"
+
+// resolveTemplateAnnotation looks up the cert-template annotation by walking
+// the owner chain: CertificateRequest → Certificate → Ingress.
+// cert-manager's ingress-shim does not propagate custom annotations from the
+// Ingress to the Certificate or CertificateRequest, so we resolve it ourselves.
+func (r *CertificateRequestReconciler) resolveTemplateAnnotation(ctx context.Context, cr *cmapi.CertificateRequest) string {
+	log := r.Log.WithValues("certificaterequest", cr.Name)
+
+	// 1. Check CertificateRequest annotations first (direct annotation on CR)
+	if cr.Annotations != nil {
+		if tmpl := cr.Annotations[certTemplateAnnotation]; tmpl != "" {
+			log.V(4).Info("Found cert-template annotation on CertificateRequest", "template", tmpl)
+			return tmpl
+		}
+	}
+
+	// 2. Look up the owning Certificate (via cert-manager annotation)
+	certName := ""
+	if cr.Annotations != nil {
+		certName = cr.Annotations["cert-manager.io/certificate-name"]
+	}
+	if certName == "" {
+		log.V(4).Info("No certificate-name annotation found, cannot resolve template from owner chain")
+		return ""
+	}
+
+	cert := &cmapi.Certificate{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: certName, Namespace: cr.Namespace}, cert); err != nil {
+		log.V(4).Info("Could not fetch owning Certificate", "certificate", certName, "error", err)
+		return ""
+	}
+
+	// Check Certificate annotations
+	if cert.Annotations != nil {
+		if tmpl := cert.Annotations[certTemplateAnnotation]; tmpl != "" {
+			log.V(4).Info("Found cert-template annotation on Certificate", "template", tmpl)
+			return tmpl
+		}
+	}
+
+	// 3. Look up the owning Ingress from Certificate's ownerReferences
+	for _, ref := range cert.OwnerReferences {
+		if ref.Kind == "Ingress" {
+			ingress := &networkingv1.Ingress{}
+			if err := r.Client.Get(ctx, client.ObjectKey{Name: ref.Name, Namespace: cr.Namespace}, ingress); err != nil {
+				log.V(4).Info("Could not fetch owning Ingress", "ingress", ref.Name, "error", err)
+				continue
+			}
+			if ingress.Annotations != nil {
+				if tmpl := ingress.Annotations[certTemplateAnnotation]; tmpl != "" {
+					log.Info("Resolved cert-template annotation from Ingress", "ingress", ref.Name, "template", tmpl)
+					return tmpl
+				}
+			}
+		}
+	}
+
+	log.V(4).Info("No cert-template annotation found in owner chain")
+	return ""
 }
 
 func RequestDiffers(adcsReq *api.AdcsRequest, certReq *cmapi.CertificateRequest) bool {
