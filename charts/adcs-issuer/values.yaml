@@ -149,7 +149,7 @@ adcs:
     create: false
     # -- Secret name (defaults to <fullname>-credentials)
     name: ""
-    # -- ADCS username (e.g., DOMAIN\\username)
+    # -- ADCS username (e.g., username)
     username: ""
     # -- ADCS password
     password: ""
