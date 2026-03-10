@@ -301,29 +301,7 @@ Maintained by **LC Waikiki SRE Team** (lcwsre@lcwaikiki.com).
 
 ## Changelog
 
-### v1.0.7
-- **Fix:** CA certificate was returned in PKCS#7 format causing nginx-ingress to reject it ("malformed tbs certificate"). Now returns proper X.509 PEM format.
-
-### v1.0.6
-- **Fix:** Duplicate certificate requests on ADCS server. `status.certificate` was empty on CertificateRequests despite showing Ready.
-  - `Issue()` now re-fetches certificate from ADCS for Ready state to recover from lost data.
-  - `SetStatus()` errors are now caught and retried instead of silently losing certificate data.
-  - Added guard to skip duplicate writes when CertificateRequest already has certificate data.
-
-### v1.0.5
-- **Fix:** Added early return for final states (Rejected/Errored) to prevent unnecessary ADCS calls.
-
-### v1.0.4
-- **Feature:** Annotation-based ADCS certificate template selection via `cert-manager.io/cert-template`.
-- Previously hardcoded to `BasicSSLWebServer`.
-
-### v1.0.3
-- **Fix:** Go `http.Client` was stripping `Authorization` header on HTTP redirects. Added `CheckRedirect` to preserve credentials.
-- **Fix:** Double-slash URL bug when ADCS URL has a trailing slash.
-
-### v1.0.2
-- **Feature:** HTTP Basic Authentication support via `authMode: "basic"` in issuer spec.
-- Enables ADCS integration from non-domain-joined Kubernetes pods (AKS, EKS, etc.).
+See [CHANGELOG.md](CHANGELOG.md) for a complete version history.
 
 
 ## License

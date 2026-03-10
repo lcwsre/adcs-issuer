@@ -19,7 +19,7 @@ We welcome contributions! This document provides guidelines for contributing to 
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - Docker
 - kubectl + access to a Kubernetes cluster
 - cert-manager v1.14+ installed in the cluster

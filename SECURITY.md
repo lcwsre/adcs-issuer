@@ -29,4 +29,4 @@ When using ADCS Issuer:
 1. **Credentials**: Always use Kubernetes Secrets for ADCS credentials. Never hardcode passwords in values files committed to version control.
 2. **RBAC**: Use `ClusterAdcsIssuer` with minimal namespace access where possible.
 3. **Network**: Ensure ADCS server communication is over HTTPS with valid TLS certificates.
-4. **Auth Mode**: Prefer `ntlm` when possible. Use `basic` only when NTLM is not available (non-domain-joined clusters), and ensure TLS is enforced.
+4. **Auth Mode**: Use `kerberos` (SPNEGO) for domain-integrated environments, or `basic` for non-domain-joined clusters. Always ensure TLS is enforced.

@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.15] - 2026-03-10
+
+### Changed
+- **Production cleanup**: Removed debug `loggingTransport` from Kerberos client
+  (was generating 2000+ log lines per request during SPNEGO debugging).
+- Removed stale TODO comments from `issuer_factory.go`.
+- Fixed outdated NTLM reference in SECURITY.md (NTLM was removed in v1.0.11).
+- Updated CONTRIBUTING.md Go version requirement to 1.26+.
+
+### Added
+- IIS/ADCS server prerequisites documentation for Kerberos (SPNEGO) authentication
+  in README.md and values.yaml (Extended Protection, SPN, provider order, kernel mode).
+
+## [1.0.14] - 2026-03-10
+
+### Added
+- Debug `loggingTransport` wrapper to trace SPNEGO HTTP roundtrips.
+
+### Fixed
+- Identified root cause: IIS Extended Protection (CBT) causes infinite 401 retry loop
+  because gokrb5 does not support Channel Binding Tokens.
+
+## [1.0.13] - 2026-03-10
+
+### Fixed
+- Kerberos HTTP requests hanging indefinitely. `http.Client.Timeout` was not
+  respected by the spnego library. Added `context.WithTimeout(30s)` to all
+  HTTP requests via `http.NewRequestWithContext()`.
+
+## [1.0.12] - 2026-03-10
+
+### Added
+- Comprehensive error logging for Kerberos HTTP operations (`logHTTPError`,
+  `logHTTPResponse`) with classification of timeout, network, and auth errors.
+
+### Changed
+- Removed dead code and unused imports from Kerberos client.
+
 ## [1.0.11] - 2026-03-10
 
 ### Removed
@@ -105,6 +143,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD workflows (lint, test, build, release).
 - Community files: README, CONTRIBUTING.md, SECURITY.md, LICENSE.
 
+[1.0.15]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.14...v1.0.15
+[1.0.14]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.13...v1.0.14
+[1.0.13]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.12...v1.0.13
+[1.0.12]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.11...v1.0.12
+[1.0.11]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.10...v1.0.11
+[1.0.10]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/lcwsre/adcs-issuer/compare/v1.0.6...v1.0.7

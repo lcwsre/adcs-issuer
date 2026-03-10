@@ -48,8 +48,6 @@ func (f *IssuerFactory) getAdcsIssuer(ctx context.Context, key client.ObjectKey)
 	if err := f.Client.Get(ctx, key, issuer); err != nil {
 		return nil, err
 	}
-	// TODO: add checking issuer status
-
 	username, password, realm, err := f.getUserPassword(ctx, issuer.Spec.CredentialsRef.Name, issuer.Namespace, issuer.Spec.AuthMode)
 	if err != nil {
 		return nil, err
@@ -116,8 +114,6 @@ func (f *IssuerFactory) getClusterAdcsIssuer(ctx context.Context, key client.Obj
 	if err := f.Client.Get(ctx, key, issuer); err != nil {
 		return nil, err
 	}
-	// TODO: add checking issuer status
-
 	username, password, realm, err := f.getUserPassword(ctx, issuer.Spec.CredentialsRef.Name, f.ClusterResourceNamespace, issuer.Spec.AuthMode)
 	if err != nil {
 		return nil, err
