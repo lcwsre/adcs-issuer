@@ -11,6 +11,7 @@ import (
 	neturl "net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jcmturner/gokrb5/v8/client"
 	"github.com/jcmturner/gokrb5/v8/config"
@@ -65,7 +66,10 @@ func NewKerberosCertsrv(url, username, realm, password string, caCertPool *x509.
 		},
 	}
 
-	httpClient := &http.Client{Transport: transport}
+	httpClient := &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: transport,
+	}
 	spnegoClient := spnego.NewClient(krbClient, httpClient, "")
 
 	// Ensure URL does not have trailing slash
