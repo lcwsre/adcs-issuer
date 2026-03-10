@@ -39,11 +39,11 @@ spec:
                 - url
               properties:
                 authMode:
-                  description: Authentication mode for the ADCS server. Supported values are "ntlm" (default) and "basic".
+                  description: Authentication mode for the ADCS server. Supported values are "basic" (default) and "kerberos".
                   type: string
                   enum:
-                    - ntlm
                     - basic
+                    - kerberos
                 caBundle:
                   description: CABundle is a PEM encoded TLS certificate to use to verify connections to the ADCS server.
                   type: string
