@@ -1,0 +1,27 @@
+{{- if and .Values.kerberos.enabled (not .Values.kerberos.krb5ConfigMapName) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "adcs-issuer.fullname" . }}-krb5-conf
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "adcs-issuer.labels" . | nindent 4 }}
+data:
+  krb5.conf: |
+{{- if .Values.kerberos.krb5Conf }}
+{{ .Values.kerberos.krb5Conf | indent 4 }}
+{{- else }}
+    [libdefaults]
+      default_realm = EXAMPLE.COM
+      dns_lookup_realm = false
+      dns_lookup_kdc = true
+    [realms]
+      EXAMPLE.COM = {
+        kdc = kdc.example.com
+        admin_server = kdc.example.com
+      }
+    [domain_realm]
+      .example.com = EXAMPLE.COM
+      example.com = EXAMPLE.COM
+{{- end }}
+{{- end }}

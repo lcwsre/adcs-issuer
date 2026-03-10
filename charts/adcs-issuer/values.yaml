@@ -109,8 +109,25 @@ kerberos:
   # When enabled, a krb5.conf ConfigMap will be mounted at /etc/krb5.conf
   enabled: false
   # -- Name of an existing ConfigMap containing krb5.conf
-  # If not set, defaults to <release-fullname>-krb5-conf
+  # If set, the chart will NOT create a ConfigMap and will use this existing one instead.
   krb5ConfigMapName: ""
+  # -- Inline krb5.conf content. Used only when krb5ConfigMapName is empty.
+  # The chart will create a ConfigMap with this content automatically.
+  # Example:
+  #   krb5Conf: |
+  #     [libdefaults]
+  #       default_realm = EXAMPLE.COM
+  #       dns_lookup_realm = false
+  #       dns_lookup_kdc = true
+  #     [realms]
+  #       EXAMPLE.COM = {
+  #         kdc = dc.example.com
+  #         admin_server = dc.example.com
+  #       }
+  #     [domain_realm]
+  #       .example.com = EXAMPLE.COM
+  #       example.com = EXAMPLE.COM
+  krb5Conf: ""
 
 certManager:
   # -- cert-manager namespace (for approver RBAC)
