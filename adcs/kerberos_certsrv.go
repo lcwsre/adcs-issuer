@@ -2,13 +2,17 @@ package adcs
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	neturl "net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -17,6 +21,49 @@ import (
 	"github.com/jcmturner/gokrb5/v8/config"
 	"github.com/jcmturner/gokrb5/v8/spnego"
 )
+
+// logHTTPError classifies and logs HTTP client errors with detailed context.
+func logHTTPError(operation string, url string, err error) {
+	if err == nil {
+		return
+	}
+	switch {
+	case os.IsTimeout(err):
+		log.Printf("ERROR [Kerberos] %s TIMEOUT after 30s: url=%s err=%s", operation, url, err)
+	case errors.Is(err, context.DeadlineExceeded):
+		log.Printf("ERROR [Kerberos] %s DEADLINE EXCEEDED: url=%s err=%s", operation, url, err)
+	default:
+		var netErr net.Error
+		if errors.As(err, &netErr) {
+			if netErr.Timeout() {
+				log.Printf("ERROR [Kerberos] %s NETWORK TIMEOUT: url=%s err=%s", operation, url, err)
+			} else {
+				log.Printf("ERROR [Kerberos] %s NETWORK ERROR: url=%s err=%s", operation, url, err)
+			}
+		} else {
+			log.Printf("ERROR [Kerberos] %s FAILED: url=%s err=%s", operation, url, err)
+		}
+	}
+}
+
+// logHTTPResponse logs HTTP response details for non-success status codes.
+func logHTTPResponse(operation string, url string, res *http.Response) {
+	if res == nil {
+		return
+	}
+	switch {
+	case res.StatusCode == http.StatusUnauthorized:
+		log.Printf("ERROR [Kerberos] %s 401 UNAUTHORIZED: url=%s - SPNEGO/Kerberos negotiation failed. Check: 1) SPN configuration 2) krb5.conf realm/KDC 3) credentials", operation, url)
+	case res.StatusCode == http.StatusForbidden:
+		log.Printf("ERROR [Kerberos] %s 403 FORBIDDEN: url=%s - User authenticated but lacks permission on ADCS. Check certificate template permissions.", operation, url)
+	case res.StatusCode >= 400 && res.StatusCode < 500:
+		log.Printf("ERROR [Kerberos] %s HTTP %d CLIENT ERROR: url=%s", operation, res.StatusCode, url)
+	case res.StatusCode >= 500:
+		log.Printf("ERROR [Kerberos] %s HTTP %d SERVER ERROR: url=%s - ADCS server issue", operation, res.StatusCode, url)
+	default:
+		log.Printf("INFO [Kerberos] %s HTTP %d: url=%s", operation, res.StatusCode, url)
+	}
+}
 
 // KerberosCertsrv implements AdcsCertsrv using Kerberos (SPNEGO) authentication.
 type KerberosCertsrv struct {
@@ -102,13 +149,17 @@ func (s *KerberosCertsrv) verifyKerberos() (bool, error) {
 
 	res, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("ERROR: ADCS server error: %s", err.Error())
-		return false, err
+		logHTTPError("Verify", s.url, err)
+		return false, fmt.Errorf("kerberos verification failed: %w", err)
 	}
 	defer res.Body.Close()
 	// Drain body to allow connection reuse
 	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, maxResponseSize))
-	log.Printf("Kerberos verification successful (res = %s)", res.Status)
+	if res.StatusCode != http.StatusOK {
+		logHTTPResponse("Verify", s.url, res)
+		return false, fmt.Errorf("kerberos verification failed with HTTP %d", res.StatusCode)
+	}
+	log.Printf("INFO [Kerberos] Verification successful (HTTP %s)", res.Status)
 	return true, nil
 }
 
@@ -117,72 +168,77 @@ func (s *KerberosCertsrv) GetExistingCertificate(id string) (AdcsResponseStatus,
 	var certStatus AdcsResponseStatus = Unknown
 
 	url := fmt.Sprintf("%s/%s?ReqID=%s&ENC=b64", s.url, certnew_cer, id)
+	log.Printf("INFO [Kerberos] GetExistingCertificate: reqID=%s url=%s", id, url)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-agent", "Mozilla")
 	res, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("ERROR: ADCS Certserv error: %s", err.Error())
+		logHTTPError("GetExistingCertificate", url, err)
 		return certStatus, "", id, err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusOK {
-		switch ct := strings.Split(res.Header.Get("Content-Type"), ";"); ct[0] {
-		case ct_html:
-			body, err := io.ReadAll(io.LimitReader(res.Body, maxResponseSize))
-			if err != nil {
-				log.Printf("ERROR: Cannot read ADCS Certserv response: %s", err.Error())
-				return certStatus, "", id, err
-			}
-			bodyString := string(body)
-			dispositionMessage := "unknown"
-			exp := regexp.MustCompile(`Disposition message:[^\t]+\t\t([^\r\n]+)`)
-			found := exp.FindStringSubmatch(bodyString)
-			if len(found) > 1 {
-				dispositionMessage = found[1]
-				expPending := regexp.MustCompile(`.*Taken Under Submission*.`)
-				expRejected := regexp.MustCompile(`.*Denied by*.`)
-				switch true {
-				case expPending.MatchString(bodyString):
-					certStatus = Pending
-				case expRejected.MatchString(bodyString):
-					certStatus = Rejected
-				default:
-					certStatus = Errored
-				}
-			} else {
-				disp := bodyString
-				if len(found) == 1 {
-					disp = found[0]
-				}
-				err = fmt.Errorf("Disposition message unknown: %s", disp)
-				log.Printf("ERROR: %s", err.Error())
-			}
+	if res.StatusCode != http.StatusOK {
+		logHTTPResponse("GetExistingCertificate", url, res)
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 1024))
+		log.Printf("ERROR [Kerberos] GetExistingCertificate response body: %s", string(body))
+		return certStatus, "", id, fmt.Errorf("ADCS Certsrv response status %s", res.Status)
+	}
 
-			lastStatusMessage := ""
-			exp = regexp.MustCompile(`LastStatus:[^\t]+\t\t([^\r\n]+)`)
-			found = exp.FindStringSubmatch(bodyString)
-			if len(found) > 1 {
-				lastStatusMessage = " " + found[1]
-			} else {
-				log.Println("WARNING: Last status unknown.")
-			}
-			return certStatus, dispositionMessage + lastStatusMessage, id, err
-
-		case ct_pkix:
-			cert, err := io.ReadAll(io.LimitReader(res.Body, maxResponseSize))
-			if err != nil {
-				log.Printf("ERROR: Cannot read ADCS Certserv response: %s", err.Error())
-				return certStatus, "", id, err
-			}
-			return Ready, string(cert), id, nil
-		default:
-			err = fmt.Errorf("Unexpected content type %s:", ct)
-			log.Printf("ERROR: %s", err.Error())
+	switch ct := strings.Split(res.Header.Get("Content-Type"), ";"); ct[0] {
+	case ct_html:
+		body, err := io.ReadAll(io.LimitReader(res.Body, maxResponseSize))
+		if err != nil {
+			log.Printf("ERROR [Kerberos] GetExistingCertificate: cannot read response: %s", err.Error())
 			return certStatus, "", id, err
 		}
+		bodyString := string(body)
+		dispositionMessage := "unknown"
+		exp := regexp.MustCompile(`Disposition message:[^\t]+\t\t([^\r\n]+)`)
+		found := exp.FindStringSubmatch(bodyString)
+		if len(found) > 1 {
+			dispositionMessage = found[1]
+			expPending := regexp.MustCompile(`.*Taken Under Submission*.`)
+			expRejected := regexp.MustCompile(`.*Denied by*.`)
+			switch true {
+			case expPending.MatchString(bodyString):
+				certStatus = Pending
+			case expRejected.MatchString(bodyString):
+				certStatus = Rejected
+			default:
+				certStatus = Errored
+			}
+		} else {
+			disp := bodyString
+			if len(found) == 1 {
+				disp = found[0]
+			}
+			err = fmt.Errorf("Disposition message unknown: %s", disp)
+			log.Printf("ERROR [Kerberos] GetExistingCertificate: %s", err.Error())
+		}
+
+		lastStatusMessage := ""
+		exp = regexp.MustCompile(`LastStatus:[^\t]+\t\t([^\r\n]+)`)
+		found = exp.FindStringSubmatch(bodyString)
+		if len(found) > 1 {
+			lastStatusMessage = " " + found[1]
+		} else {
+			log.Println("WARNING [Kerberos] GetExistingCertificate: Last status unknown.")
+		}
+		return certStatus, dispositionMessage + lastStatusMessage, id, err
+
+	case ct_pkix:
+		cert, err := io.ReadAll(io.LimitReader(res.Body, maxResponseSize))
+		if err != nil {
+			log.Printf("ERROR [Kerberos] GetExistingCertificate: cannot read cert response: %s", err.Error())
+			return certStatus, "", id, err
+		}
+		return Ready, string(cert), id, nil
+	default:
+		err = fmt.Errorf("unexpected content type %s", ct)
+		log.Printf("ERROR [Kerberos] GetExistingCertificate: %s", err.Error())
+		return certStatus, "", id, err
 	}
-	return certStatus, "", id, fmt.Errorf("ADCS Certsrv response status %s", res.Status)
 }
 
 // RequestCertificate submits a new certificate signing request to ADCS.
@@ -207,26 +263,37 @@ func (s *KerberosCertsrv) RequestCertificate(csr string, template string) (AdcsR
 	req.Header.Set("User-agent", "Mozilla")
 	req.Header.Set("Content-type", ct_urlenc)
 
-	log.Printf("Sending Kerberos request to: %s", url)
+	log.Printf("INFO [Kerberos] RequestCertificate: sending CSR to %s template=%s", url, template)
 
 	res, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("ERROR: ADCS Certserv error: %s", err.Error())
-		return certStatus, "", "", err
+		logHTTPError("RequestCertificate", url, err)
+		return certStatus, "", "", fmt.Errorf("kerberos request to ADCS failed: %w", err)
 	}
 	defer res.Body.Close()
+
+	log.Printf("INFO [Kerberos] RequestCertificate: HTTP %d, Content-Type: %s", res.StatusCode, res.Header.Get("Content-Type"))
+
+	if res.StatusCode != http.StatusOK {
+		logHTTPResponse("RequestCertificate", url, res)
+		errBody, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
+		log.Printf("ERROR [Kerberos] RequestCertificate response body: %s", string(errBody))
+		return certStatus, "", "", fmt.Errorf("ADCS returned HTTP %d: %s", res.StatusCode, string(errBody))
+	}
+
 	body, err := io.ReadAll(io.LimitReader(res.Body, maxResponseSize))
 	if res.Header.Get("Content-type") == ct_pkix {
+		log.Printf("INFO [Kerberos] RequestCertificate: certificate issued immediately (PKIX response)")
 		return Ready, string(body), "none", nil
 	}
 
 	if err != nil {
-		log.Printf("ERROR: Cannot read ADCS Certserv response: %s", err.Error())
+		log.Printf("ERROR [Kerberos] RequestCertificate: cannot read response body: %s", err.Error())
 		return certStatus, "", "", err
 	}
 
 	bodyString := string(body)
-	log.Printf("Response body length: %d", len(bodyString))
+	log.Printf("INFO [Kerberos] RequestCertificate: response body length=%d", len(bodyString))
 
 	exp := regexp.MustCompile(`certnew.cer\?ReqID=([0-9]+)&`)
 	found := exp.FindStringSubmatch(bodyString)
@@ -259,11 +326,12 @@ func (s *KerberosCertsrv) RequestCertificate(csr string, template string) (AdcsR
 func (s *KerberosCertsrv) obtainCaCertificate(certPage string, expectedContentType string) (string, error) {
 	// Check for newest renewal number
 	url := fmt.Sprintf("%s/%s", s.url, certcarc)
+	log.Printf("INFO [Kerberos] obtainCaCertificate: checking renewals at %s", url)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-agent", "Mozilla")
 	res1, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("ERROR: ADCS Certserv error: %s", err.Error())
+		logHTTPError("obtainCaCertificate", url, err)
 		return "", err
 	}
 	defer res1.Body.Close()
@@ -288,26 +356,28 @@ func (s *KerberosCertsrv) obtainCaCertificate(certPage string, expectedContentTy
 	req.Header.Set("User-agent", "Mozilla")
 	res2, err := s.httpClient.Do(req)
 	if err != nil {
-		log.Printf("ERROR: ADCS Certserv error: %s", err.Error())
+		logHTTPError("obtainCaCertificate-fetch", url, err)
 		return "", err
 	}
 	defer res2.Body.Close()
 
-	if res2.StatusCode == http.StatusOK {
-		ct := res2.Header.Get("Content-Type")
-		if expectedContentType != ct {
-			err = fmt.Errorf("Unexpected content type %s:", ct)
-			log.Printf("ERROR: %s", err.Error())
-			return "", err
-		}
-		body, err := io.ReadAll(io.LimitReader(res2.Body, maxResponseSize))
-		if err != nil {
-			log.Printf("ERROR: Cannot read ADCS Certserv response: %s", err.Error())
-			return "", err
-		}
-		return string(body), nil
+	if res2.StatusCode != http.StatusOK {
+		logHTTPResponse("obtainCaCertificate-fetch", url, res2)
+		return "", fmt.Errorf("ADCS Certsrv response status %s", res2.Status)
 	}
-	return "", fmt.Errorf("ADCS Certsrv response status %s", res2.Status)
+
+	ct := res2.Header.Get("Content-Type")
+	if expectedContentType != ct {
+		err = fmt.Errorf("unexpected content type %s (expected %s)", ct, expectedContentType)
+		log.Printf("ERROR [Kerberos] obtainCaCertificate: %s", err.Error())
+		return "", err
+	}
+	body, err = io.ReadAll(io.LimitReader(res2.Body, maxResponseSize))
+	if err != nil {
+		log.Printf("ERROR [Kerberos] obtainCaCertificate: cannot read response: %s", err.Error())
+		return "", err
+	}
+	return string(body), nil
 }
 
 // GetCaCertificate retrieves the CA certificate from ADCS in X.509 PEM format.
