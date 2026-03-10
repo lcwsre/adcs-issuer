@@ -51,9 +51,11 @@ type ClusterAdcsIssuerSpec struct {
 	RetryInterval string `json:"retryInterval,omitempty"`
 
 	// AuthMode specifies the authentication mode for the ADCS server.
-	// Supported values: "ntlm" (default) and "basic".
+	// Supported values: "ntlm" (default), "basic", and "kerberos".
 	// Use "basic" when the ADCS IIS has Basic Authentication enabled
 	// and the Kubernetes cluster is not domain-joined.
+	// Use "kerberos" for SPNEGO/Kerberos authentication (requires /etc/krb5.conf
+	// in the container and a "realm" field in the credentials secret).
 	// +optional
 	AuthMode string `json:"authMode,omitempty"`
 }

@@ -16,12 +16,13 @@ ADCS Issuer has been tested with cert-manager v1.14+ and supports CertificateReq
 
 ### Authentication Modes
 
-ADCS Issuer supports two authentication modes configured via the `authMode` field in the issuer spec:
+ADCS Issuer supports three authentication modes configured via the `authMode` field in the issuer spec:
 
 | Mode | Description | When to use |
 |------|-------------|-------------|
 | `ntlm` (default) | NTLM authentication | When pods are domain-joined or NTLM-capable |
 | `basic` | HTTP Basic Authentication | When pods are NOT domain-joined (e.g., AKS, EKS). Requires Basic Auth enabled on IIS/ADCS certsrv |
+| `kerberos` | Kerberos (SPNEGO) authentication | When pods can obtain Kerberos tickets. Requires `/etc/krb5.conf` in the container and a `realm` field in the credentials secret |
 
 ### Certificate Template Selection
 
@@ -55,7 +56,7 @@ spec:
   statusCheckInterval: 6h
   retryInterval: 1h
   url: <adcs-service-url>
-  authMode: basic  # or "ntlm" (default)
+  authMode: basic  # "ntlm" (default), "basic", or "kerberos"
 ```
 
 For cluster-wide usage (recommended for multi-namespace environments):
@@ -80,10 +81,12 @@ The `statusCheckInterval` indicates how often the status of the request should b
 
 The `retryInterval` says how long to wait before retrying requests that errored.
 
-The `authMode` specifies the authentication mode: `"ntlm"` (default) or `"basic"`.
+The `authMode` specifies the authentication mode: `"ntlm"` (default), `"basic"`, or `"kerberos"`.
 
-The `credentialsRef.name` is name of a secret that stores user credentials used for authentication. The secret must be `Opaque` and contain `password` and `username` fields only e.g.:
-```
+The `credentialsRef.name` is name of a secret that stores user credentials used for authentication. The secret must be `Opaque` and contain `password` and `username` fields. For Kerberos mode, a `realm` field is also required:
+
+**Basic/NTLM secret:**
+```yaml
 apiVersion: v1
 data:
   password: cGFzc3dvcmQ=
@@ -94,6 +97,22 @@ metadata:
   namespace: <namespace>
 type: Opaque
 ```
+
+**Kerberos secret (includes realm):**
+```yaml
+apiVersion: v1
+data:
+  password: cGFzc3dvcmQ=
+  username: dXNlcm5hbWU=
+  realm: RVhBTVBMRS5DT00=   # base64 of "EXAMPLE.COM"
+kind: Secret
+metadata:
+  name: test-adcs-issuer-credentials
+  namespace: <namespace>
+type: Opaque
+```
+
+> **Note:** Kerberos mode requires a valid `/etc/krb5.conf` file mounted in the controller container. You can mount it via a ConfigMap volume in the Helm chart or deployment manifest.
 If cluster level issuer configuration is needed then `ClusterAdcsIssuer` can be defined (see above).
 
 The secret used by the `ClusterAdcsIssuer` must be defined in the namespace where controller's pod is running.

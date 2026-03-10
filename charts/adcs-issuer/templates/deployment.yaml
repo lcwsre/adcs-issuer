@@ -76,18 +76,29 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if .Values.webhook.enabled }}
           volumeMounts:
+          {{- if .Values.webhook.enabled }}
             - name: cert
               mountPath: /tmp/k8s-webhook-server/serving-certs
               readOnly: true
           {{- end }}
-      {{- if .Values.webhook.enabled }}
+          {{- if .Values.kerberos.enabled }}
+            - name: krb5-conf
+              mountPath: /etc/krb5.conf
+              subPath: krb5.conf
+              readOnly: true
+          {{- end }}
       volumes:
+      {{- if .Values.webhook.enabled }}
         - name: cert
           secret:
             secretName: {{ include "adcs-issuer.fullname" . }}-webhook-tls
             defaultMode: 420
+      {{- end }}
+      {{- if .Values.kerberos.enabled }}
+        - name: krb5-conf
+          configMap:
+            name: {{ .Values.kerberos.krb5ConfigMapName | default (printf "%s-krb5-conf" (include "adcs-issuer.fullname" .)) }}
       {{- end }}
       terminationGracePeriodSeconds: 10
       {{- with .Values.nodeSelector }}

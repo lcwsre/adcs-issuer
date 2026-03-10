@@ -50,7 +50,7 @@ func (f *IssuerFactory) getAdcsIssuer(ctx context.Context, key client.ObjectKey)
 	}
 	// TODO: add checking issuer status
 
-	username, password, err := f.getUserPassword(ctx, issuer.Spec.CredentialsRef.Name, issuer.Namespace)
+	username, password, realm, err := f.getUserPassword(ctx, issuer.Spec.CredentialsRef.Name, issuer.Namespace, issuer.Spec.AuthMode)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,14 @@ func (f *IssuerFactory) getAdcsIssuer(ctx context.Context, key client.ObjectKey)
 	}
 	log.Info("Using authentication mode", "authMode", authMode)
 
-	certServ, err := adcs.NewNtlmCertsrv(issuer.Spec.URL, username, password, caCertPool, false, authMode)
+	var certServ adcs.AdcsCertsrv
+	switch authMode {
+	case "kerberos":
+		certServ, err = adcs.NewKerberosCertsrv(issuer.Spec.URL, username, realm, password, caCertPool, false)
+	default:
+		// "ntlm" and "basic" are both handled by NtlmCertsrv
+		certServ, err = adcs.NewNtlmCertsrv(issuer.Spec.URL, username, password, caCertPool, false, authMode)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +118,7 @@ func (f *IssuerFactory) getClusterAdcsIssuer(ctx context.Context, key client.Obj
 	}
 	// TODO: add checking issuer status
 
-	username, password, err := f.getUserPassword(ctx, issuer.Spec.CredentialsRef.Name, f.ClusterResourceNamespace)
+	username, password, realm, err := f.getUserPassword(ctx, issuer.Spec.CredentialsRef.Name, f.ClusterResourceNamespace, issuer.Spec.AuthMode)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +147,14 @@ func (f *IssuerFactory) getClusterAdcsIssuer(ctx context.Context, key client.Obj
 	}
 	log.Info("Using authentication mode", "authMode", authMode)
 
-	certServ, err := adcs.NewNtlmCertsrv(issuer.Spec.URL, username, password, caCertPool, false, authMode)
+	var certServ adcs.AdcsCertsrv
+	switch authMode {
+	case "kerberos":
+		certServ, err = adcs.NewKerberosCertsrv(issuer.Spec.URL, username, realm, password, caCertPool, false)
+	default:
+		// "ntlm" and "basic" are both handled by NtlmCertsrv
+		certServ, err = adcs.NewNtlmCertsrv(issuer.Spec.URL, username, password, caCertPool, false, authMode)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -178,16 +192,26 @@ func getInterval(specValue string, def string, log logr.Logger) time.Duration {
 
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-func (f *IssuerFactory) getUserPassword(ctx context.Context, secretName string, namespace string) (string, string, error) {
+func (f *IssuerFactory) getUserPassword(ctx context.Context, secretName string, namespace string, authMode string) (string, string, string, error) {
 	secret := new(corev1.Secret)
 	if err := f.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, secret); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if _, ok := secret.Data["username"]; !ok {
-		return "", "", fmt.Errorf("User name not set in secret")
+		return "", "", "", fmt.Errorf("User name not set in secret")
 	}
 	if _, ok := secret.Data["password"]; !ok {
-		return "", "", fmt.Errorf("Password not set in secret")
+		return "", "", "", fmt.Errorf("Password not set in secret")
 	}
-	return string(secret.Data["username"]), string(secret.Data["password"]), nil
+
+	// Kerberos requires a realm field in the secret
+	var realm string
+	if strings.ToLower(strings.TrimSpace(authMode)) == "kerberos" {
+		if _, ok := secret.Data["realm"]; !ok {
+			return "", "", "", fmt.Errorf("realm not set in secret (required for Kerberos auth)")
+		}
+		realm = string(secret.Data["realm"])
+	}
+
+	return string(secret.Data["username"]), string(secret.Data["password"]), realm, nil
 }

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2026-03-10
+
+### Added
+- Kerberos (SPNEGO) authentication support via `authMode: "kerberos"` in issuer spec.
+  Uses `github.com/jcmturner/gokrb5/v8` library for Kerberos ticket acquisition.
+- New `realm` field support in credentials secret (required for Kerberos mode).
+- Helm chart: `kerberos.enabled` and `kerberos.krb5ConfigMapName` values for
+  mounting `/etc/krb5.conf` via ConfigMap.
+
+### Changed
+- `getUserPassword` now supports returning `realm` from credentials secret.
+- Authentication mode selection uses `switch` for cleaner NTLM/Basic/Kerberos routing.
+- Updated README with three-mode authentication documentation and Kerberos examples.
+
 ## [1.0.9] - 2026-03-09
 
 ### Added
