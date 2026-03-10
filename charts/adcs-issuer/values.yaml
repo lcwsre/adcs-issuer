@@ -107,6 +107,31 @@ webhook:
 kerberos:
   # -- Enable Kerberos (SPNEGO) authentication support
   # When enabled, a krb5.conf ConfigMap will be mounted at /etc/krb5.conf
+  #
+  # IMPORTANT: IIS/ADCS Server Prerequisites for Kerberos (SPNEGO) Authentication
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 1. Extended Protection (CBT) MUST be DISABLED on the certsrv IIS site.
+  #    The Go gokrb5 SPNEGO library does NOT support Channel Binding Tokens (CBT).
+  #    If Extended Protection is set to "Accept" or "Require", IIS will reject
+  #    every Kerberos token with 401 Unauthorized in an infinite retry loop.
+  #    Fix:
+  #      Set-WebConfigurationProperty -Filter "/system.webServer/security/authentication/windowsAuthentication/extendedProtection" \
+  #        -PSPath "IIS:\Sites\Default Web Site\certsrv" -Name "tokenChecking" -Value "None"
+  #      iisreset
+  #
+  # 2. Windows Authentication provider order: "Negotiate" MUST be listed BEFORE "NTLM".
+  #    Check:
+  #      Get-WebConfigurationProperty -Filter "/system.webServer/security/authentication/windowsAuthentication" \
+  #        -PSPath "IIS:\Sites\Default Web Site\certsrv" -Name "providers" | Select -ExpandProperty Collection
+  #
+  # 3. An HTTP SPN must be registered for the ADCS server:
+  #      setspn -S HTTP/adcs.example.com ADCSSERVER$
+  #
+  # 4. Windows Authentication must be ENABLED on the certsrv IIS site.
+  #
+  # 5. If useKernelMode is true, useAppPoolCredentials should also be true
+  #    (or the app pool must run as the machine account).
+  # ─────────────────────────────────────────────────────────────────────────────
   enabled: false
   # -- Name of an existing ConfigMap containing krb5.conf
   # If set, the chart will NOT create a ConfigMap and will use this existing one instead.
@@ -155,6 +180,7 @@ adcs:
     password: ""
     # -- Kerberos realm (e.g., EXAMPLE.COM). Only used when adcs.issuer.authMode is "kerberos".
     # This value is added to the credentials secret as the "realm" field.
+    # Must match the Active Directory domain name in UPPERCASE (e.g., EXAMPLE.COM).
     realm: ""
     # -- Use an existing Secret instead of creating a new one.
     # When set, 'create' is ignored for credential lookup.

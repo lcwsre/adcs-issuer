@@ -112,6 +112,47 @@ type: Opaque
 ```
 
 > **Note:** Kerberos mode requires a valid `/etc/krb5.conf` file mounted in the controller container. You can mount it via a ConfigMap volume in the Helm chart or deployment manifest.
+
+#### IIS/ADCS Server Prerequisites for Kerberos (SPNEGO)
+
+Before using Kerberos authentication, the following **must** be configured on the ADCS/IIS server:
+
+| # | Requirement | Details |
+|---|-------------|--------|
+| 1 | **Extended Protection MUST be disabled** | The Go `gokrb5` SPNEGO library does **not** support Channel Binding Tokens (CBT). If Extended Protection is set to `Accept` or `Require`, IIS will reject every Kerberos token with `401 Unauthorized` causing an infinite retry loop until timeout. |
+| 2 | **Negotiate before NTLM** | Windows Authentication provider order must list `Negotiate` before `NTLM`. |
+| 3 | **HTTP SPN registered** | An `HTTP/adcs.example.com` SPN must be registered for the ADCS server computer account. |
+| 4 | **Windows Authentication enabled** | Windows Authentication must be enabled on the `certsrv` IIS virtual directory. |
+| 5 | **Kernel mode + AppPool credentials** | If `useKernelMode` is `true`, `useAppPoolCredentials` should also be `true` (or the app pool must run as the machine account). |
+
+**PowerShell commands to verify and fix on the ADCS server:**
+
+```powershell
+# Check Extended Protection (must be "None")
+Get-WebConfigurationProperty -Filter "/system.webServer/security/authentication/windowsAuthentication/extendedProtection" `
+  -PSPath "IIS:\Sites\Default Web Site\certsrv" -Name "tokenChecking"
+
+# Disable Extended Protection if enabled
+Set-WebConfigurationProperty -Filter "/system.webServer/security/authentication/windowsAuthentication/extendedProtection" `
+  -PSPath "IIS:\Sites\Default Web Site\certsrv" -Name "tokenChecking" -Value "None"
+
+# Check auth provider order (Negotiate should be first)
+Get-WebConfigurationProperty -Filter "/system.webServer/security/authentication/windowsAuthentication" `
+  -PSPath "IIS:\Sites\Default Web Site\certsrv" -Name "providers" | Select-Object -ExpandProperty Collection
+
+# Check kernel mode settings
+Get-WebConfigurationProperty -Filter "/system.webServer/security/authentication/windowsAuthentication" `
+  -PSPath "IIS:\Sites\Default Web Site\certsrv" -Name "useKernelMode"
+Get-WebConfigurationProperty -Filter "/system.webServer/security/authentication/windowsAuthentication" `
+  -PSPath "IIS:\Sites\Default Web Site\certsrv" -Name "useAppPoolCredentials"
+
+# Register HTTP SPN (run on Domain Controller or with domain admin)
+setspn -S HTTP/adcs.example.com ADCSSERVER$
+
+# Restart IIS after changes
+iisreset
+```
+
 If cluster level issuer configuration is needed then `ClusterAdcsIssuer` can be defined (see above).
 
 The secret used by the `ClusterAdcsIssuer` must be defined in the namespace where controller's pod is running.
