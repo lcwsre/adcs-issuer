@@ -142,7 +142,9 @@ func NewKerberosCertsrv(url, username, realm, password string, caCertPool *x509.
 // verifyKerberos checks connectivity to the ADCS server using Kerberos auth.
 func (s *KerberosCertsrv) verifyKerberos() (bool, error) {
 	log.Printf("Kerberos verification for URL %s", s.url)
-	req, err := http.NewRequest("GET", s.url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", s.url, nil)
 	if err != nil {
 		return false, err
 	}
@@ -169,7 +171,9 @@ func (s *KerberosCertsrv) GetExistingCertificate(id string) (AdcsResponseStatus,
 
 	url := fmt.Sprintf("%s/%s?ReqID=%s&ENC=b64", s.url, certnew_cer, id)
 	log.Printf("INFO [Kerberos] GetExistingCertificate: reqID=%s url=%s", id, url)
-	req, _ := http.NewRequest("GET", url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 	req.Header.Set("User-agent", "Mozilla")
 	res, err := s.httpClient.Do(req)
 	if err != nil {
@@ -255,7 +259,9 @@ func (s *KerberosCertsrv) RequestCertificate(csr string, template string) (AdcsR
 		"SaveCert":            {"yes"},
 		"CertificateTemplate": {template},
 	}
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(params.Encode()))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBufferString(params.Encode()))
 	if err != nil {
 		log.Printf("ERROR: Cannot create request: %s", err.Error())
 		return certStatus, "", "", err
@@ -327,7 +333,9 @@ func (s *KerberosCertsrv) obtainCaCertificate(certPage string, expectedContentTy
 	// Check for newest renewal number
 	url := fmt.Sprintf("%s/%s", s.url, certcarc)
 	log.Printf("INFO [Kerberos] obtainCaCertificate: checking renewals at %s", url)
-	req, _ := http.NewRequest("GET", url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 	req.Header.Set("User-agent", "Mozilla")
 	res1, err := s.httpClient.Do(req)
 	if err != nil {
@@ -352,7 +360,9 @@ func (s *KerberosCertsrv) obtainCaCertificate(certPage string, expectedContentTy
 
 	// Get CA cert (newest renewal number)
 	url = fmt.Sprintf("%s/%s?ReqID=CACert&ENC=b64&Renewal=%s", s.url, certPage, renewal)
-	req, _ = http.NewRequest("GET", url, nil)
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel2()
+	req, _ = http.NewRequestWithContext(ctx2, "GET", url, nil)
 	req.Header.Set("User-agent", "Mozilla")
 	res2, err := s.httpClient.Do(req)
 	if err != nil {

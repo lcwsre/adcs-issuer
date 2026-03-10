@@ -14,7 +14,7 @@ image:
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Overrides the image tag (default is the chart appVersion)
-  tag: "1.0.12"
+  tag: "1.0.13"
 
 # -- Reference existing image pull secrets by name
 # Use this if you already have a registry secret in the namespace
