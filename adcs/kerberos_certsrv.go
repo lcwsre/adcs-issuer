@@ -65,6 +65,41 @@ func logHTTPResponse(operation string, url string, res *http.Response) {
 	}
 }
 
+// loggingTransport wraps an http.RoundTripper to log each HTTP roundtrip.
+// This helps debug SPNEGO negotiation steps.
+type loggingTransport struct {
+	wrapped http.RoundTripper
+	counter int
+}
+
+func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	t.counter++
+	step := t.counter
+	authHeader := req.Header.Get("Authorization")
+	authInfo := "none"
+	if len(authHeader) > 0 {
+		if len(authHeader) > 20 {
+			authInfo = authHeader[:20] + fmt.Sprintf("... (%d bytes)", len(authHeader))
+		} else {
+			authInfo = authHeader
+		}
+	}
+	log.Printf("DEBUG [Kerberos] HTTP RoundTrip #%d: %s %s Auth=[%s]", step, req.Method, req.URL.String(), authInfo)
+
+	start := time.Now()
+	resp, err := t.wrapped.RoundTrip(req)
+	elapsed := time.Since(start)
+
+	if err != nil {
+		log.Printf("DEBUG [Kerberos] HTTP RoundTrip #%d: ERROR after %s: %s", step, elapsed, err)
+		return resp, err
+	}
+	wwwAuth := resp.Header.Get("WWW-Authenticate")
+	log.Printf("DEBUG [Kerberos] HTTP RoundTrip #%d: %d %s (took %s) WWW-Authenticate=[%s]",
+		step, resp.StatusCode, resp.Status, elapsed, wwwAuth)
+	return resp, err
+}
+
 // KerberosCertsrv implements AdcsCertsrv using Kerberos (SPNEGO) authentication.
 type KerberosCertsrv struct {
 	url        string
@@ -113,9 +148,12 @@ func NewKerberosCertsrv(url, username, realm, password string, caCertPool *x509.
 		},
 	}
 
+	// Wrap transport with logging to trace SPNEGO negotiation steps
+	logTransport := &loggingTransport{wrapped: transport}
+
 	httpClient := &http.Client{
 		Timeout:   30 * time.Second,
-		Transport: transport,
+		Transport: logTransport,
 	}
 	spnegoClient := spnego.NewClient(krbClient, httpClient, "")
 
