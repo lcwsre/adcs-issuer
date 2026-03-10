@@ -14,7 +14,7 @@ image:
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Overrides the image tag (default is the chart appVersion)
-  tag: "1.0.10"
+  tag: "1.0.11"
 
 # -- Reference existing image pull secrets by name
 # Use this if you already have a registry secret in the namespace
@@ -158,9 +158,9 @@ adcs:
     # -- Retry interval for communication errors (Go duration, e.g., "1h")
     retryInterval: "5m"
     # -- Authentication mode for the ADCS server.
-    # "ntlm" (default): Uses NTLM authentication (requires domain-joined or NTLM-capable environment)
-    # "basic": Uses HTTP Basic Authentication (requires Basic Auth enabled on IIS/ADCS certsrv)
-    authMode: "ntlm"
+    # "basic" (default): Uses HTTP Basic Authentication (requires Basic Auth enabled on IIS/ADCS certsrv)
+    # "kerberos": Uses Kerberos (SPNEGO) authentication (requires kerberos.enabled=true and krb5.conf ConfigMap)
+    authMode: "basic"
 
   certificate:
     # -- Create a sample cert-manager Certificate resource

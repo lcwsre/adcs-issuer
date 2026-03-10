@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.11] - 2026-03-10
+
+### Removed
+- **BREAKING:** NTLM authentication support has been completely removed.
+  The `github.com/Azure/go-ntlmssp` dependency is no longer used.
+- `ntlm_certsrv.go` removed; replaced by `basic_certsrv.go`.
+
+### Changed
+- **BREAKING:** Default `authMode` changed from `"ntlm"` to `"basic"`.
+  Existing deployments using the default (NTLM) must explicitly set `authMode: "basic"`
+  or will automatically use Basic Auth after upgrade.
+- Renamed `NtlmCertsrv` → `BasicCertsrv`, `NewNtlmCertsrv` → `NewBasicCertsrv`.
+- Only two authentication modes remain: `"basic"` (default) and `"kerberos"`.
+- Updated Helm chart `values.yaml`: default `authMode` is now `"basic"`.
+- Updated README with two-mode authentication documentation.
+
 ## [1.0.10] - 2026-03-10
 
 ### Added
@@ -16,8 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `getUserPassword` now supports returning `realm` from credentials secret.
-- Authentication mode selection uses `switch` for cleaner NTLM/Basic/Kerberos routing.
-- Updated README with three-mode authentication documentation and Kerberos examples.
+- Authentication mode selection uses `switch` for cleaner Basic/Kerberos routing.
+- Updated README with authentication documentation and Kerberos examples.
 
 ## [1.0.9] - 2026-03-09
 

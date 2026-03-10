@@ -12,14 +12,12 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/Azure/go-ntlmssp"
 )
 
 // maxResponseSize limits the size of HTTP response bodies to prevent memory exhaustion (10 MB).
 const maxResponseSize = 10 * 1024 * 1024
 
-type NtlmCertsrv struct {
+type BasicCertsrv struct {
 	url        string
 	username   string
 	password   string
@@ -38,8 +36,7 @@ const (
 	ct_urlenc = "application/x-www-form-urlencoded"
 )
 
-func NewNtlmCertsrv(url string, username string, password string, caCertPool *x509.CertPool, verify bool, authMode string) (AdcsCertsrv, error) {
-	var client *http.Client
+func NewBasicCertsrv(url string, username string, password string, caCertPool *x509.CertPool, verify bool) (AdcsCertsrv, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: false,
@@ -48,35 +45,25 @@ func NewNtlmCertsrv(url string, username string, password string, caCertPool *x5
 		},
 	}
 
+	var client *http.Client
 	if username != "" && password != "" {
-		if authMode == "basic" {
-			// Use plain HTTP Basic Authentication (no NTLM)
-			// Requires Basic Auth to be enabled on IIS/ADCS certsrv
-			client = &http.Client{
-				Timeout:   30 * time.Second,
-				Transport: transport,
-				// Preserve Authorization header on same-host redirects (e.g. /certsrv -> /certsrv/)
-				CheckRedirect: func(req *http.Request, via []*http.Request) error {
-					if len(via) >= 10 {
-						return fmt.Errorf("stopped after 10 redirects")
-					}
-					if len(via) > 0 {
-						req.SetBasicAuth(username, password)
-					}
-					return nil
-				},
-			}
-			log.Println("Using Basic Authentication mode")
-		} else {
-			// Set up NTLM authentication (default)
-			client = &http.Client{
-				Timeout: 30 * time.Second,
-				Transport: ntlmssp.Negotiator{
-					RoundTripper: transport,
-				},
-			}
-			log.Println("Using NTLM Authentication mode")
+		// Use HTTP Basic Authentication
+		// Requires Basic Auth to be enabled on IIS/ADCS certsrv
+		client = &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: transport,
+			// Preserve Authorization header on same-host redirects (e.g. /certsrv -> /certsrv/)
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return fmt.Errorf("stopped after 10 redirects")
+				}
+				if len(via) > 0 {
+					req.SetBasicAuth(username, password)
+				}
+				return nil
+			},
 		}
+		log.Println("Using Basic Authentication mode")
 	} else {
 		// Plain client with no auth
 		client = &http.Client{
@@ -89,14 +76,14 @@ func NewNtlmCertsrv(url string, username string, password string, caCertPool *x5
 	// Ensure URL does not have trailing slash (sub-paths are built with Sprintf("%s/resource", url))
 	url = strings.TrimRight(url, "/")
 
-	c := &NtlmCertsrv{
+	c := &BasicCertsrv{
 		url:        url,
 		username:   username,
 		password:   password,
 		httpClient: client,
 	}
 	if verify {
-		success, err := c.verifyNtlm()
+		success, err := c.verify()
 		if !success {
 			return nil, err
 		}
@@ -104,9 +91,9 @@ func NewNtlmCertsrv(url string, username string, password string, caCertPool *x5
 	return c, nil
 }
 
-// Check if NTLM authentication is working for current credentials and URL
-func (s *NtlmCertsrv) verifyNtlm() (bool, error) {
-	log.Printf("NTLM verification for URL %s", s.url)
+// Check if Basic authentication is working for current credentials and URL
+func (s *BasicCertsrv) verify() (bool, error) {
+	log.Printf("Basic auth verification for URL %s", s.url)
 	req, _ := http.NewRequest("GET", s.url, nil)
 	req.SetBasicAuth(s.username, s.password)
 	res, err := s.httpClient.Do(req)
@@ -117,7 +104,7 @@ func (s *NtlmCertsrv) verifyNtlm() (bool, error) {
 	defer res.Body.Close()
 	// Drain and discard the body to allow connection reuse
 	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, maxResponseSize))
-	log.Printf("NTLM verification successful (res = %s)", res.Status)
+	log.Printf("Basic auth verification successful (res = %s)", res.Status)
 	return true, nil
 }
 
@@ -128,7 +115,7 @@ func (s *NtlmCertsrv) verifyNtlm() (bool, error) {
  * - ADCS Request ID
  * - Error
  */
-func (s *NtlmCertsrv) GetExistingCertificate(id string) (AdcsResponseStatus, string, string, error) {
+func (s *BasicCertsrv) GetExistingCertificate(id string) (AdcsResponseStatus, string, string, error) {
 	var certStatus AdcsResponseStatus = Unknown
 
 	url := fmt.Sprintf("%s/%s?ReqID=%s&ENC=b64", s.url, certnew_cer, id)
@@ -215,7 +202,7 @@ func (s *NtlmCertsrv) GetExistingCertificate(id string) (AdcsResponseStatus, str
  * - ADCS Request ID (if known)
  * - Error
  */
-func (s *NtlmCertsrv) RequestCertificate(csr string, template string) (AdcsResponseStatus, string, string, error) {
+func (s *BasicCertsrv) RequestCertificate(csr string, template string) (AdcsResponseStatus, string, string, error) {
 	var certStatus AdcsResponseStatus = Unknown
 
 	url := fmt.Sprintf("%s/%s", s.url, certfnsh)
@@ -287,7 +274,7 @@ func (s *NtlmCertsrv) RequestCertificate(csr string, template string) (AdcsRespo
 	return s.GetExistingCertificate(certId)
 }
 
-func (s *NtlmCertsrv) obtainCaCertificate(certPage string, expectedContentType string) (string, error) {
+func (s *BasicCertsrv) obtainCaCertificate(certPage string, expectedContentType string) (string, error) {
 
 	// Check for newest renewal number
 	url := fmt.Sprintf("%s/%s", s.url, certcarc)
@@ -343,11 +330,11 @@ func (s *NtlmCertsrv) obtainCaCertificate(certPage string, expectedContentType s
 	}
 	return "", fmt.Errorf("ADCS Certsrv response status %s", res2.Status)
 }
-func (s *NtlmCertsrv) GetCaCertificate() (string, error) {
+func (s *BasicCertsrv) GetCaCertificate() (string, error) {
 	log.Printf("Getting CA from ADCS Certsrv %s", s.url)
 	return s.obtainCaCertificate(certnew_cer, ct_pkix)
 }
-func (s *NtlmCertsrv) GetCaCertificateChain() (string, error) {
+func (s *BasicCertsrv) GetCaCertificateChain() (string, error) {
 	log.Printf("Getting CA Chain from ADCS Certsrv %s", s.url)
 	return s.obtainCaCertificate(certnew_p7b, ct_pkcs7)
 }

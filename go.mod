@@ -3,7 +3,6 @@ module github.com/lcwsre/adcs-issuer
 go 1.26.1
 
 require (
-	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358
 	github.com/cert-manager/cert-manager v1.15.4
 	github.com/go-logr/logr v1.4.1
 	github.com/jcmturner/gokrb5/v8 v8.4.4

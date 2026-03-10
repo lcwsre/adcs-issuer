@@ -5,7 +5,7 @@ ADCS Issuer is a [cert-manager's](https://github.com/cert-manager/cert-manager) 
 
 ADCS provides HTTP GUI that can be normally used to request new certificates or see status of existing requests. This implementation is simply a HTTP client that interacts with the
 ADCS server sending appropriately prepared HTTP requests and interpretting the server's HTTP responses (the approach inspired by [this Python ADCS client](https://github.com/magnuswatn/certsrv)).
-It supports **NTLM** and **HTTP Basic** authentication.
+It supports **HTTP Basic** and **Kerberos (SPNEGO)** authentication.
 
 ## Description
 
@@ -16,12 +16,11 @@ ADCS Issuer has been tested with cert-manager v1.14+ and supports CertificateReq
 
 ### Authentication Modes
 
-ADCS Issuer supports three authentication modes configured via the `authMode` field in the issuer spec:
+ADCS Issuer supports two authentication modes configured via the `authMode` field in the issuer spec:
 
 | Mode | Description | When to use |
 |------|-------------|-------------|
-| `ntlm` (default) | NTLM authentication | When pods are domain-joined or NTLM-capable |
-| `basic` | HTTP Basic Authentication | When pods are NOT domain-joined (e.g., AKS, EKS). Requires Basic Auth enabled on IIS/ADCS certsrv |
+| `basic` (default) | HTTP Basic Authentication | Standard mode. Requires Basic Auth enabled on IIS/ADCS certsrv |
 | `kerberos` | Kerberos (SPNEGO) authentication | When pods can obtain Kerberos tickets. Requires `/etc/krb5.conf` in the container and a `realm` field in the credentials secret |
 
 ### Certificate Template Selection
@@ -56,7 +55,7 @@ spec:
   statusCheckInterval: 6h
   retryInterval: 1h
   url: <adcs-service-url>
-  authMode: basic  # "ntlm" (default), "basic", or "kerberos"
+  authMode: basic  # "basic" (default) or "kerberos"
 ```
 
 For cluster-wide usage (recommended for multi-namespace environments):
@@ -81,11 +80,11 @@ The `statusCheckInterval` indicates how often the status of the request should b
 
 The `retryInterval` says how long to wait before retrying requests that errored.
 
-The `authMode` specifies the authentication mode: `"ntlm"` (default), `"basic"`, or `"kerberos"`.
+The `authMode` specifies the authentication mode: `"basic"` (default) or `"kerberos"`.
 
 The `credentialsRef.name` is name of a secret that stores user credentials used for authentication. The secret must be `Opaque` and contain `password` and `username` fields. For Kerberos mode, a `realm` field is also required:
 
-**Basic/NTLM secret:**
+**Basic secret:**
 ```yaml
 apiVersion: v1
 data:

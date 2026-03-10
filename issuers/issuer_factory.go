@@ -75,7 +75,7 @@ func (f *IssuerFactory) getAdcsIssuer(ctx context.Context, key client.ObjectKey)
 
 	authMode := strings.ToLower(strings.TrimSpace(issuer.Spec.AuthMode))
 	if authMode == "" {
-		authMode = "ntlm"
+		authMode = "basic"
 	}
 	log.Info("Using authentication mode", "authMode", authMode)
 
@@ -84,8 +84,8 @@ func (f *IssuerFactory) getAdcsIssuer(ctx context.Context, key client.ObjectKey)
 	case "kerberos":
 		certServ, err = adcs.NewKerberosCertsrv(issuer.Spec.URL, username, realm, password, caCertPool, false)
 	default:
-		// "ntlm" and "basic" are both handled by NtlmCertsrv
-		certServ, err = adcs.NewNtlmCertsrv(issuer.Spec.URL, username, password, caCertPool, false, authMode)
+		// "basic" is the default authentication mode
+		certServ, err = adcs.NewBasicCertsrv(issuer.Spec.URL, username, password, caCertPool, false)
 	}
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (f *IssuerFactory) getClusterAdcsIssuer(ctx context.Context, key client.Obj
 
 	authMode := strings.ToLower(strings.TrimSpace(issuer.Spec.AuthMode))
 	if authMode == "" {
-		authMode = "ntlm"
+		authMode = "basic"
 	}
 	log.Info("Using authentication mode", "authMode", authMode)
 
@@ -152,8 +152,8 @@ func (f *IssuerFactory) getClusterAdcsIssuer(ctx context.Context, key client.Obj
 	case "kerberos":
 		certServ, err = adcs.NewKerberosCertsrv(issuer.Spec.URL, username, realm, password, caCertPool, false)
 	default:
-		// "ntlm" and "basic" are both handled by NtlmCertsrv
-		certServ, err = adcs.NewNtlmCertsrv(issuer.Spec.URL, username, password, caCertPool, false, authMode)
+		// "basic" is the default authentication mode
+		certServ, err = adcs.NewBasicCertsrv(issuer.Spec.URL, username, password, caCertPool, false)
 	}
 	if err != nil {
 		return nil, err
