@@ -1,11 +1,22 @@
 # ADCS Issuer
 
-ADCS Issuer is a [cert-manager's](https://github.com/cert-manager/cert-manager) CertificateRequest controller that uses MS Active Directory Certificate Service to sign certificates 
-(see [cert-manager external issuers documentation](https://cert-manager.io/docs/contributing/external-issuers/) for details on external issuers). 
+ADCS Issuer is a [cert-manager](https://github.com/cert-manager/cert-manager) CertificateRequest controller that integrates with **Microsoft Active Directory Certificate Services (ADCS)**
+to sign certificates in enterprise Kubernetes environments
+(see [cert-manager external issuers documentation](https://cert-manager.io/docs/contributing/external-issuers/) for details on external issuers).
 
-ADCS provides HTTP GUI that can be normally used to request new certificates or see status of existing requests. This implementation is simply a HTTP client that interacts with the
-ADCS server sending appropriately prepared HTTP requests and interpretting the server's HTTP responses (the approach inspired by [this Python ADCS client](https://github.com/magnuswatn/certsrv)).
-It supports **HTTP Basic** and **Kerberos (SPNEGO)** authentication.
+It communicates with the ADCS `certsrv` HTTP interface directly — no additional agent or Windows component required
+(approach inspired by [this Python ADCS client](https://github.com/magnuswatn/certsrv)).
+
+## Key Features
+
+| Feature | Description |
+|---|---|
+| 🔐 **HTTP Basic Authentication** | Standard username/password auth against ADCS certsrv via IIS Basic Auth |
+| 🎟️ **Kerberos (SPNEGO) Authentication** | Domain-integrated Kerberos auth via `gokrb5/v8` — no password exposed, works with Windows Auth on IIS |
+| 📋 **ADCS Template Selection** | Per-certificate ADCS template via `cert-manager.io/cert-template` annotation — enables Server Auth, Client Auth (mTLS), SubCA, or any custom enterprise template |
+| 🔗 **Ingress Annotation Propagation** | Annotation flows automatically: Ingress → Certificate → CertificateRequest — ingress-shim users need no manual `Certificate` resources |
+| 🌐 **Namespace & Cluster Scope** | Both `AdcsIssuer` (namespace-scoped) and `ClusterAdcsIssuer` (cluster-wide) supported |
+| ⎈ **Helm Chart** | Production-ready Helm chart with RBAC, webhooks, and credential management |
 
 ## Description
 
@@ -25,17 +36,97 @@ ADCS Issuer supports two authentication modes configured via the `authMode` fiel
 
 ### Certificate Template Selection
 
-ADCS certificate templates can be specified per-Certificate using the `cert-manager.io/cert-template` annotation:
+ADCS Issuer supports per-certificate ADCS template selection via the `cert-manager.io/cert-template` annotation.
+This is a key differentiator from other ADCS implementations: rather than being hardcoded to a single template
+(e.g. `BasicSSLWebServer`), each `Certificate` or `Ingress` resource can declare which ADCS template to use —
+enabling Server Authentication, Client Authentication (mutual TLS), or any custom enterprise template to be
+issued automatically with no manual intervention.
+
+#### Common ADCS Template Use Cases
+
+| Template Name | Key Usage (EKU) | Typical Use Case |
+|---|---|---|
+| `WebServer` | Server Authentication (1.3.6.1.5.5.7.3.1) | HTTPS endpoints, ingress TLS |
+| `BasicSSLWebServer` | Server Authentication | Legacy default, same as WebServer |
+| `Computer` | Server + Client Authentication | Machine certificates (workload identity) |
+| `User` | Client Authentication (1.3.6.1.5.5.7.3.2) | Mutual TLS (mTLS) client certificates |
+| `SmartcardUser` | Client Authentication + Smart Card Logon | Smart card / user identity |
+| `SubCA` | Certificate Signing | Intermediate CA issuance |
+| `<CustomTemplate>` | Any EKU defined in your AD | Enterprise-defined templates |
+
+> By choosing different templates per workload, you can automatically issue certificates with the exact
+> Extended Key Usages (EKU) required — no manual CA admin involvement after initial configuration.
+
+#### Example: Server-only TLS (Ingress)
 
 ```yaml
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: my-cert
+  name: my-server-cert
   annotations:
-    cert-manager.io/cert-template: "WebServer"
+    cert-manager.io/cert-template: "WebServer"   # Server Authentication EKU only
 spec:
-  # ...
+  dnsNames:
+    - api.example.com
+  issuerRef:
+    group: adcs.certmanager.lcwsre.io
+    kind: ClusterAdcsIssuer
+    name: my-adcs
+  secretName: my-server-cert
+```
+
+#### Example: Mutual TLS (mTLS) Client Certificate
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: my-client-cert
+  annotations:
+    cert-manager.io/cert-template: "User"   # Client Authentication EKU
+spec:
+  commonName: my-service-account
+  issuerRef:
+    group: adcs.certmanager.lcwsre.io
+    kind: ClusterAdcsIssuer
+    name: my-adcs
+  secretName: my-client-cert
+```
+
+#### Annotation Propagation: Ingress → Certificate → CertificateRequest
+
+When using **ingress-shim** (cert-manager auto-creates a `Certificate` from an `Ingress`), the
+`cert-manager.io/cert-template` annotation is propagated automatically through the full ownership chain:
+
+```
+Ingress (cert-manager.io/cert-template: "WebServer")
+  └─► Certificate  (annotation copied by ingress-shim)
+        └─► CertificateRequest  (annotation read by ADCS Issuer)
+              └─► ADCS certsrv  (template passed in the HTTP request)
+```
+
+This means operators can **annotate the Ingress** directly — there is no need to create `Certificate`
+resources manually for each service:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-app
+  annotations:
+    cert-manager.io/issuer: "my-adcs"
+    cert-manager.io/issuer-kind: "ClusterAdcsIssuer"
+    cert-manager.io/issuer-group: "adcs.certmanager.lcwsre.io"
+    cert-manager.io/cert-template: "WebServer"   # ← propagated to CertificateRequest automatically
+spec:
+  tls:
+    - hosts:
+        - my-app.example.com
+      secretName: my-app-tls
+  rules:
+    - host: my-app.example.com
+      # ...
 ```
 
 If no annotation is specified, the default template `BasicSSLWebServer` is used.
@@ -216,24 +307,31 @@ status:
 ```
 
 #### Auto-request certificate from ingress
-Add the following to an `Ingress` for cert-manager to auto-generate a
-`Certificate` using `Ingress` information with ingress-shim:
+
+Add the following annotations to an `Ingress` for cert-manager's ingress-shim to auto-generate a
+`Certificate`. The `cert-manager.io/cert-template` annotation is propagated automatically through
+the Ingress → Certificate → CertificateRequest ownership chain — see
+[Certificate Template Selection](#certificate-template-selection) for background and the full list
+of template use cases (Server Auth, Client Auth, mTLS, SubCA, etc.).
+
 ```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
 metadata:
   name: test-ingress
   annotations:
-    cert-manager.io/issuer: "adcs-issuer"           # issuer name
-    cert-manager.io/issuer-kind: "ClusterAdcsIssuer" # or AdcsIssuer
+    cert-manager.io/issuer: "adcs-issuer"             # issuer name
+    cert-manager.io/issuer-kind: "ClusterAdcsIssuer"  # or AdcsIssuer
     cert-manager.io/issuer-group: "adcs.certmanager.lcwsre.io"
-    cert-manager.io/cert-template: "WebServer"  # optional: ADCS template
-```
-in addition to:
-```yaml
+    cert-manager.io/cert-template: "WebServer"        # optional: ADCS template (Server Auth)
 spec:
   tls:
     - hosts:
         - test-host.com
       secretName: ingress-secret
+  rules:
+    - host: test-host.com
+      # ...
 ```
 
 ## Installation
